@@ -47,6 +47,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .btn-purple  {background:#6f42c1;}
 .btn-orange  {background:#fd7e14;}
 .btn-pink    {background:#e91e8c;}
+.btn-orange-full{background:#fd7e14;color:white;}
 
 /* CARDS */
 .card{background:white;padding:16px;border-radius:10px;margin-bottom:15px;box-shadow:0 3px 8px rgba(0,0,0,0.06);border-left:6px solid #1cc88a;}
@@ -220,6 +221,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <div id="perfilInfo"  style="font-size:13px;margin-bottom:4px;"></div>
     <div id="setorInfo"   style="font-size:12px;opacity:.7;margin-bottom:12px;"></div>
     <button class="btn-primary" onclick="novoTicket();closeSidebar()">+ Novo Ticket</button>
+    <button class="btn-dark" id="btnBackup" onclick="abrirModalBackup();closeSidebar()" style="background:#2d6a4f;margin-top:8px;">💾 Backup / Restaurar</button>
     <button class="btn-dark"    onclick="logout()" style="margin-top:auto;">Sair</button>
   </div>
   <div class="main">
@@ -353,6 +355,61 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
       <button class="btn-pink" onclick="confirmarAguardandoCliente()">✔ Confirmar Pendência</button>
       <button class="btn-dark" onclick="cancelarAguardandoCliente()">Cancelar</button>
     </div>
+  </div>
+</div>
+
+
+<!-- ============================================================
+     MODAL: BACKUP / RESTAURAR
+     ============================================================ -->
+<div id="modalBackup" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:560px;">
+    <h3>💾 Backup &amp; Restauração</h3>
+
+    <!-- BACKUP -->
+    <div style="background:#f0faf4;border:1px solid #1cc88a;border-radius:8px;padding:16px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="font-size:22px;">📤</span>
+        <div>
+          <b style="font-size:14px;">Exportar Backup</b>
+          <div style="font-size:12px;color:#555;margin-top:2px;">Gera um arquivo <b>.json</b> com todos os dados: tickets, usuários, responsáveis, serviços e setores.</div>
+        </div>
+      </div>
+      <div id="backupInfo" style="font-size:12px;color:#888;margin-bottom:10px;"></div>
+      <button class="btn-success" onclick="fazerBackup()" style="width:100%;padding:9px;font-size:13px;">
+        ⬇️ Baixar Backup Agora
+      </button>
+    </div>
+
+    <!-- RESTAURAR -->
+    <div style="background:#fff8f0;border:1px solid #fd7e14;border-radius:8px;padding:16px;margin-bottom:16px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+        <span style="font-size:22px;">📥</span>
+        <div>
+          <b style="font-size:14px;">Restaurar Backup</b>
+          <div style="font-size:12px;color:#555;margin-top:2px;">Selecione um arquivo <b>.json</b> gerado anteriormente. <span style="color:#e74a3b;font-weight:600;">Atenção: os dados atuais serão substituídos!</span></div>
+        </div>
+      </div>
+      <div id="restaurarInfo" style="font-size:12px;margin-bottom:10px;display:none;"></div>
+      <label style="display:block;margin-bottom:8px;">
+        <div style="background:#fd7e14;color:white;text-align:center;padding:9px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;" onclick="document.getElementById('inputRestaurar').click()">
+          📂 Selecionar Arquivo .json
+        </div>
+        <input type="file" id="inputRestaurar" accept=".json" style="display:none;" onchange="lerArquivoBackup(this)">
+      </label>
+      <div id="previewRestaurar" style="display:none;background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:10px;margin-bottom:10px;font-size:12px;"></div>
+      <button id="btnConfirmarRestaurar" class="btn-orange" onclick="confirmarRestaurar()" style="width:100%;padding:9px;font-size:13px;display:none;">
+        ⚠️ Confirmar Restauração
+      </button>
+    </div>
+
+    <!-- HISTÓRICO DE BACKUPS -->
+    <div style="background:#f4f6fb;border:1px solid #e3e6f0;border-radius:8px;padding:12px;margin-bottom:16px;">
+      <b style="font-size:13px;">🕐 Último Backup Realizado</b>
+      <div id="ultimoBackupInfo" style="font-size:12px;color:#888;margin-top:6px;">Nenhum backup realizado nesta sessão.</div>
+    </div>
+
+    <button class="btn-dark" onclick="fecharModal('modalBackup')" style="width:100%;">Fechar</button>
   </div>
 </div>
 
@@ -644,8 +701,10 @@ function login(){
   document.getElementById("setorInfo").innerHTML   =
     usuarioLogado.setor ? "Setor: <b>"+escHtml(usuarioLogado.setor)+"</b>" : "";
 
-  // Controle de visibilidade: Auxiliar não vê o menu Cadastros
+  // Controle de visibilidade: Auxiliar não vê o menu Cadastros nem Backup
   document.getElementById("btnCadastros").style.display =
+    usuarioLogado.perfil === "adm" ? "block" : "none";
+  document.getElementById("btnBackup").style.display =
     usuarioLogado.perfil === "adm" ? "block" : "none";
 
   atualizarSeletorVisao();
@@ -2112,6 +2171,234 @@ function escHtml(str){
   return String(str).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+
+
+/* ============================================================
+   BACKUP & RESTAURAÇÃO
+   ============================================================ */
+let _dadosRestaurar = null;
+
+function abrirModalBackup(){
+  if(usuarioLogado.perfil !== "adm"){
+    alert("Acesso restrito. Apenas administradores podem fazer backup.");
+    return;
+  }
+
+  // Atualiza info de resumo
+  const info = document.getElementById("backupInfo");
+  if(info){
+    info.innerHTML =
+      `📊 <b>${tickets.length}</b> tickets &nbsp;|&nbsp; <b>${usuarios.length}</b> usuários &nbsp;|&nbsp; ` +
+      `<b>${responsaveis.length}</b> responsáveis &nbsp;|&nbsp; <b>${servicosCadastro.length}</b> serviços &nbsp;|&nbsp; ` +
+      `<b>${setores.length}</b> setores`;
+  }
+
+  // Limpa preview de restauração
+  const prev = document.getElementById("previewRestaurar");
+  const btnConf = document.getElementById("btnConfirmarRestaurar");
+  const restInfo = document.getElementById("restaurarInfo");
+  if(prev){ prev.style.display="none"; prev.innerHTML=""; }
+  if(btnConf){ btnConf.style.display="none"; }
+  if(restInfo){ restInfo.style.display="none"; }
+  _dadosRestaurar = null;
+  const inp = document.getElementById("inputRestaurar");
+  if(inp) inp.value = "";
+
+  document.getElementById("modalBackup").style.display = "flex";
+}
+
+function fazerBackup(){
+  const agr = new Date();
+  const dataStr = agr.toLocaleDateString("pt-BR").replace(/\//g,"-");
+  const horaStr = agr.toLocaleTimeString("pt-BR").replace(/:/g,"-");
+
+  const backup = {
+    _meta: {
+      versao: "1.0",
+      geradoEm: agr.toISOString(),
+      geradoPor: usuarioLogado.nome,
+      totalTickets: tickets.length,
+      totalUsuarios: usuarios.length,
+      totalResponsaveis: responsaveis.length,
+      totalServicos: servicosCadastro.length,
+      totalSetores: setores.length
+    },
+    setores,
+    usuarios,
+    responsaveis,
+    servicosCadastro,
+    tickets
+  };
+
+  const json = JSON.stringify(backup, null, 2);
+  const blob = new Blob([json], {type: "application/json"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `CRM_Backup_${dataStr}_${horaStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  // Registra horário do último backup
+  const ultimoEl = document.getElementById("ultimoBackupInfo");
+  if(ultimoEl){
+    ultimoEl.innerHTML =
+      `✅ Backup realizado em <b>${agr.toLocaleString("pt-BR")}</b> por <b>${escHtml(usuarioLogado.nome)}</b><br>` +
+      `Arquivo: <code>CRM_Backup_${dataStr}_${horaStr}.json</code>`;
+    ultimoEl.style.color = "#155724";
+  }
+}
+
+function lerArquivoBackup(input){
+  const file = input.files[0];
+  if(!file){ return; }
+
+  const restInfo = document.getElementById("restaurarInfo");
+  if(restInfo){
+    restInfo.style.display = "block";
+    restInfo.style.color   = "#888";
+    restInfo.innerHTML     = "⏳ Lendo arquivo...";
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e){
+    try {
+      const dados = JSON.parse(e.target.result);
+
+      // Valida estrutura mínima
+      if(!dados.tickets || !dados.usuarios || !dados.setores){
+        throw new Error("Arquivo inválido: faltam campos obrigatórios (tickets, usuarios, setores).");
+      }
+
+      _dadosRestaurar = dados;
+
+      // Mostra preview
+      const meta = dados._meta || {};
+      const prev = document.getElementById("previewRestaurar");
+      if(prev){
+        prev.style.display = "block";
+        prev.innerHTML =
+          `<b>📋 Dados do arquivo selecionado:</b><br>` +
+          `📅 Gerado em: <b>${meta.geradoEm ? new Date(meta.geradoEm).toLocaleString("pt-BR") : "desconhecido"}</b><br>` +
+          `👤 Gerado por: <b>${escHtml(meta.geradoPor||"desconhecido")}</b><br>` +
+          `🎫 Tickets: <b>${(dados.tickets||[]).length}</b> &nbsp;|&nbsp; ` +
+          `👥 Usuários: <b>${(dados.usuarios||[]).length}</b><br>` +
+          `👤 Responsáveis: <b>${(dados.responsaveis||[]).length}</b> &nbsp;|&nbsp; ` +
+          `🔧 Serviços: <b>${(dados.servicosCadastro||[]).length}</b> &nbsp;|&nbsp; ` +
+          `🏢 Setores: <b>${(dados.setores||[]).length}</b><br>` +
+          `<br><span style="color:#c0392b;font-weight:600;">⚠️ Ao confirmar, os dados atuais do Firebase serão completamente substituídos!</span>`;
+      }
+
+      const btnConf = document.getElementById("btnConfirmarRestaurar");
+      if(btnConf) btnConf.style.display = "block";
+
+      if(restInfo){
+        restInfo.innerHTML = `✅ Arquivo <b>${escHtml(file.name)}</b> lido com sucesso.`;
+        restInfo.style.color = "#155724";
+      }
+
+    } catch(err){
+      _dadosRestaurar = null;
+      const prev = document.getElementById("previewRestaurar");
+      if(prev){ prev.style.display="none"; prev.innerHTML=""; }
+      const btnConf = document.getElementById("btnConfirmarRestaurar");
+      if(btnConf) btnConf.style.display="none";
+      if(restInfo){
+        restInfo.style.color = "#e74a3b";
+        restInfo.innerHTML   = `❌ Erro ao ler arquivo: ${escHtml(err.message)}`;
+      }
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function confirmarRestaurar(){
+  if(!_dadosRestaurar){
+    alert("Nenhum arquivo carregado.");
+    return;
+  }
+
+  if(!confirm(
+    "⚠️ ATENÇÃO!\n\n" +
+    "Você está prestes a SUBSTITUIR todos os dados atuais do CRM pelos dados do backup.\n\n" +
+    "Esta ação não pode ser desfeita!\n\n" +
+    "Clique OK para confirmar a restauração."
+  )) return;
+
+  const btnConf = document.getElementById("btnConfirmarRestaurar");
+  if(btnConf){ btnConf.disabled=true; btnConf.textContent="⏳ Restaurando..."; }
+
+  try {
+    const d = _dadosRestaurar;
+
+    // ── Função auxiliar: limpa coleção e insere novos docs ──────────────
+    async function _restaurarColecao(colName, arr){
+      // 1) Busca todos os IDs existentes
+      const snap = await db.collection(colName).get();
+
+      // 2) Deleta em batch
+      const LIMITE = 450;
+      for(let i=0; i<snap.docs.length; i+=LIMITE){
+        const batch = db.batch();
+        snap.docs.slice(i,i+LIMITE).forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+      }
+
+      // 3) Insere novos itens em batch
+      const items = arr || [];
+      for(let i=0; i<items.length; i+=LIMITE){
+        const batch = db.batch();
+        items.slice(i,i+LIMITE).forEach(item => {
+          const { _id, ...dados } = item;
+          const ref = _id
+            ? db.collection(colName).doc(_id)
+            : db.collection(colName).doc();
+          batch.set(ref, dados);
+        });
+        await batch.commit();
+      }
+    }
+
+    // Restaura setores
+    await db.collection("configuracoes").doc("geral").set({ setores: d.setores || [] });
+
+    // Restaura coleções
+    await _restaurarColecao("usuarios",    d.usuarios         || []);
+    await _restaurarColecao("responsaveis",d.responsaveis     || []);
+    await _restaurarColecao("servicos",    d.servicosCadastro || []);
+    await _restaurarColecao("tickets",     d.tickets          || []);
+
+    // Atualiza dados em memória
+    setores          = d.setores          || [];
+    usuarios         = d.usuarios         || [];
+    responsaveis     = d.responsaveis     || [];
+    servicosCadastro = d.servicosCadastro || [];
+    tickets          = d.tickets          || [];
+
+    const ultimoEl = document.getElementById("ultimoBackupInfo");
+    if(ultimoEl){
+      ultimoEl.innerHTML =
+        `✅ <b>Restauração concluída</b> em ${new Date().toLocaleString("pt-BR")} por <b>${escHtml(usuarioLogado.nome)}</b>`;
+      ultimoEl.style.color = "#155724";
+    }
+
+    fecharModal("modalBackup");
+    alert("✅ Backup restaurado com sucesso! O CRM foi atualizado com os dados do arquivo.");
+
+    // Recarrega a tela de tickets
+    atualizarSeletorVisao();
+    mostrarTickets();
+
+  } catch(err){
+    console.error("Erro ao restaurar:", err);
+    alert("❌ Erro ao restaurar: " + err.message);
+  } finally {
+    if(btnConf){ btnConf.disabled=false; btnConf.textContent="⚠️ Confirmar Restauração"; }
+    _dadosRestaurar = null;
+  }
+}
 
 /* ============================================================
    INIT
