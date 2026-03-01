@@ -6,11 +6,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
 *{box-sizing:border-box;}
-body{margin:0;font-family:Segoe UI,sans-serif;background:#eef2f7;display:flex;height:100vh;}
+body{margin:0;font-family:Segoe UI,sans-serif;background:#eef2f7;display:flex;height:100vh;overflow:hidden;}
 
-/* SIDEBAR */
-.sidebar{width:270px;background:#1f2937;color:white;padding:20px;display:flex;flex-direction:column;flex-shrink:0;}
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
+.sidebar{
+  width:270px;background:#1f2937;color:white;padding:20px;
+  display:flex;flex-direction:column;flex-shrink:0;
+  transition:transform .3s ease;
+  z-index:200;
+}
 .sidebar button,.sidebar select{margin-bottom:10px;width:100%;}
+
+/* HAMBURGER */
+.hamburger{
+  display:none;position:fixed;top:12px;left:12px;z-index:300;
+  background:#1f2937;border:none;border-radius:6px;
+  padding:8px 10px;cursor:pointer;color:white;font-size:20px;
+}
+.sidebar-overlay{
+  display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:150;
+}
 
 /* MAIN */
 .main{flex:1;padding:20px;overflow:auto;}
@@ -36,8 +53,14 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .card.evolucao{border-left-color:#4e73df;background:#e8f0ff;}
 
 /* LOGIN */
-.login-container{width:100%;display:flex;justify-content:center;align-items:center;height:100vh;}
-.login-box{background:white;padding:30px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,0.1);width:320px;}
+.login-container{width:100%;display:flex;justify-content:center;align-items:center;height:100vh;background:#eef2f7;}
+.login-box{background:white;padding:34px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,0.12);width:340px;max-width:95vw;}
+.login-box h2{margin-top:0;margin-bottom:6px;color:#1f2937;}
+.login-box .login-sub{font-size:13px;color:#888;margin-bottom:22px;}
+.login-field{margin-bottom:14px;}
+.login-field label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;}
+.login-field input{font-size:14px;padding:10px 12px;}
+.login-error{color:#e74a3b;font-size:12px;margin-top:8px;display:none;}
 
 /* TABS */
 .tabs{margin-bottom:15px;display:flex;flex-wrap:wrap;gap:6px;}
@@ -57,8 +80,8 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .chk-resp{font-size:10px;color:#4e73df;font-weight:600;}
 
 /* MODAL */
-.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.48);display:flex;align-items:center;justify-content:center;z-index:999;}
-.modal-box{background:white;border-radius:10px;padding:26px;min-width:360px;max-width:480px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.48);display:flex;align-items:center;justify-content:center;z-index:999;padding:12px;}
+.modal-box{background:white;border-radius:10px;padding:26px;min-width:320px;max-width:95vw;width:480px;box-shadow:0 8px 30px rgba(0,0,0,0.25);max-height:90vh;overflow-y:auto;}
 .modal-box h3{margin-top:0;margin-bottom:12px;}
 
 /* TICKET CARD */
@@ -75,7 +98,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 @keyframes pulse48{0%,100%{opacity:1;}50%{opacity:.6;}}
 
 /* RESUMO */
-.resumo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+.resumo-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:10px;}
 .resumo-card{color:white;border-radius:10px;padding:14px;text-align:center;}
 .resumo-num{font-size:28px;font-weight:bold;}
 .resumo-label{font-size:12px;opacity:.9;}
@@ -86,36 +109,117 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 /* HISTÓRICO */
 .hist-row{border-bottom:1px solid #d0d9f0;padding:9px 0;font-size:13px;overflow:hidden;}
 .hist-row.atualiz{background:#fffbea;border-left:3px solid #f6c23e;padding-left:8px;}
+
+/* PERFIL BADGE */
+.perfil-badge-adm{background:#4e73df;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+.perfil-badge-auxiliar{background:#6c757d;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
+
+/* ============================================================
+   RESPONSIVO — MOBILE
+   ============================================================ */
+@media (max-width:768px){
+  body{flex-direction:column;height:auto;overflow:auto;}
+
+  .hamburger{display:block;}
+
+  .sidebar{
+    position:fixed;top:0;left:0;height:100%;
+    transform:translateX(-100%);overflow-y:auto;
+  }
+  .sidebar.open{transform:translateX(0);}
+  .sidebar-overlay.open{display:block;}
+
+  .main{padding:10px;padding-top:56px;}
+
+  .resumo-grid{grid-template-columns:repeat(2,1fr)!important;}
+  .resumo-num{font-size:20px;}
+  .resumo-label{font-size:11px;}
+
+  .card{padding:12px;}
+
+  /* Formulários novo ticket / ver ticket */
+  .grid-2col{grid-template-columns:1fr!important;}
+
+  /* Tabela serviços scrollável */
+  .srv-table-wrap{overflow-x:auto;}
+  .srv-table{min-width:520px;}
+
+  /* Botões de ação ticket */
+  .ticket-actions{flex-wrap:wrap!important;gap:6px!important;}
+  .ticket-actions button{margin-bottom:4px;}
+
+  /* Filtros tickets */
+  .filtros-row{flex-direction:column!important;gap:8px!important;}
+  .filtros-row input,.filtros-row select{width:100%!important;margin:0!important;}
+
+  /* Login */
+  .login-box{width:100%;border-radius:10px;padding:24px;}
+
+  /* Modal */
+  .modal-box{padding:18px;min-width:0;width:100%;}
+
+  /* Servico cadastro */
+  .servico-item{grid-template-columns:1fr auto auto;gap:6px;}
+  .servico-item input[type=number]{width:70px;}
+
+  /* Usuario cadastro */
+  .user-row{flex-wrap:wrap!important;}
+  .user-row input,.user-row select{flex:1 1 100%!important;}
+
+  /* Resumo quick filters */
+  .quick-filters{flex-wrap:wrap!important;}
+  .quick-filters button{font-size:10px!important;padding:3px 6px!important;}
+}
+
+@media (max-width:480px){
+  .resumo-grid{grid-template-columns:1fr 1fr!important;}
+  .tabs button{font-size:11px;padding:5px 8px;}
+}
 </style>
 </head>
 <body>
+
+<!-- HAMBURGER -->
+<button class="hamburger" onclick="toggleSidebar()">☰</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <!-- ============================================================
      LOGIN
      ============================================================ -->
 <div id="loginScreen" class="login-container">
   <div class="login-box">
-    <h2 style="margin-top:0;">🔐 Login CRM</h2>
-    <label>Selecione o usuário:</label>
-    <select id="loginUser"></select>
-    <button class="btn-primary" style="margin-top:12px;width:100%;padding:9px;" onclick="login()">Entrar</button>
+    <h2 style="margin-top:0;">🔐 CRM — Login</h2>
+    <p class="login-sub">Digite seu usuário e senha para acessar</p>
+    <div class="login-field">
+      <label>Usuário</label>
+      <input type="text" id="loginUserName" placeholder="Seu nome de usuário" autocomplete="username"
+        onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
+    </div>
+    <div class="login-field">
+      <label>Senha</label>
+      <input type="password" id="loginPassword" placeholder="Sua senha"
+        onkeydown="if(event.key==='Enter')login()">
+    </div>
+    <div id="loginError" class="login-error">⚠ Usuário ou senha incorretos.</div>
+    <button class="btn-primary" style="margin-top:6px;width:100%;padding:11px;font-size:14px;" onclick="login()">Entrar →</button>
   </div>
 </div>
 
 <!-- ============================================================
      APP
      ============================================================ -->
-<div id="crmApp" style="display:none;width:100%;">
-  <div class="sidebar">
+<div id="crmApp" style="display:none;width:100%;display:none;">
+  <div class="sidebar" id="mainSidebar">
     <h2 style="margin-top:0;">CRM</h2>
-    <button class="btn-primary" onclick="mostrarTickets()">🎫 Tickets</button>
-    <button class="btn-success" onclick="mostrarCadastros()">📋 CADASTROS</button>
+    <button class="btn-primary" onclick="mostrarTickets();closeSidebar()">🎫 Tickets</button>
+    <button class="btn-success" id="btnCadastros" onclick="mostrarCadastros();closeSidebar()">📋 CADASTROS</button>
     <label style="font-size:12px;opacity:.7;margin-top:4px;">Visão:</label>
     <select id="filtroVisao" onchange="mostrarTickets()"></select>
     <hr style="border-color:#374151;margin:12px 0;">
     <div id="usuarioInfo" style="font-size:13px;"></div>
-    <div id="perfilInfo"  style="font-size:13px;margin-bottom:12px;"></div>
-    <button class="btn-primary" onclick="novoTicket()">+ Novo Ticket</button>
+    <div id="perfilInfo"  style="font-size:13px;margin-bottom:4px;"></div>
+    <div id="setorInfo"   style="font-size:12px;opacity:.7;margin-bottom:12px;"></div>
+    <button class="btn-primary" onclick="novoTicket();closeSidebar()">+ Novo Ticket</button>
     <button class="btn-dark"    onclick="logout()" style="margin-top:auto;">Sair</button>
   </div>
   <div class="main">
@@ -270,24 +374,30 @@ const firebaseConfig = {
   appId: "1:198667496213:web:679aa4e323edd8ba30571c"
 };
 
-// Inicializa o Firebase
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-window.db = db; // expõe para funções que verificam window.db
+window.db = db;
 
 
 /* ============================================================
    DADOS
-   ============================================================ */
-/* ============================================================
-   DADOS — Agora vem do Firebase
    ============================================================ */
 let usuarios         = [];
 let setores          = [];
 let responsaveis     = [];
 let servicosCadastro = [];
 let tickets          = [];
+let usuarioLogado    = null;
 let _dadosCarregados = false;
+
+// Pendências de modal
+let _pendIniciado        = {ticketId:null,srvIdx:null};
+let _pendFinalizado      = {ticketId:null,srvIdx:null};
+let _pendDesmarcarFin    = {ticketId:null,srvIdx:null};
+let _pendAtualizacao     = {ticketId:null};
+let _pendAguardandoCliente = {ticketId:null, statusAnterior:null};
+let _ticketTransfId      = null;
+let _srvTemp             = [];
 
 // Carrega todos os dados do Firebase
 async function carregarDadosFirebase() {
@@ -298,7 +408,6 @@ async function carregarDadosFirebase() {
       setores = configDoc.data().setores || ["Comercial","Credenciamento","Suporte"];
     } else {
       setores = ["Comercial","Credenciamento","Suporte"];
-      // Cria o documento se não existir
       await db.collection("configuracoes").doc("geral").set({ setores });
     }
 
@@ -306,9 +415,11 @@ async function carregarDadosFirebase() {
     const usrSnap = await db.collection("usuarios").get();
     usuarios = usrSnap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
     if (!usuarios.length) {
-      // Cria usuário padrão
-      const ref = await db.collection("usuarios").add({ nome: "Elizeu", perfil: "adm" });
-      usuarios = [{ _id: ref.id, nome: "Elizeu", perfil: "adm" }];
+      // Cria usuário padrão ADM
+      const ref = await db.collection("usuarios").add({
+        nome: "Elizeu", perfil: "adm", setor: "", senha: ""
+      });
+      usuarios = [{ _id: ref.id, nome: "Elizeu", perfil: "adm", setor: "", senha: "" }];
     }
 
     // 3) Responsáveis
@@ -325,7 +436,6 @@ async function carregarDadosFirebase() {
 
     _dadosCarregados = true;
     console.log("✅ Dados carregados do Firebase!");
-    console.log(`   ${usuarios.length} usuários, ${tickets.length} tickets`);
   } catch (err) {
     console.error("❌ Erro ao carregar Firebase:", err);
     alert("Erro ao conectar com o banco de dados. Verifique o console (F12).");
@@ -333,30 +443,27 @@ async function carregarDadosFirebase() {
 }
 
 
-
-
 /* ============================================================
-   PERSISTÊNCIA
+   PERSISTÊNCIA — Firebase
    ============================================================ */
-/* ============================================================
-   PERSISTÊNCIA — Salva no Firebase
-   ============================================================ */
-
-// Salva setores
 async function salvarSetores() {
   try {
     await db.collection("configuracoes").doc("geral").set({ setores });
   } catch (err) { console.error("Erro ao salvar setores:", err); }
 }
 
-// Salva um usuário específico (criar ou atualizar)
 async function salvarUsuario(usuario) {
   try {
+    const dados = {
+      nome:   usuario.nome   || "",
+      perfil: usuario.perfil || "auxiliar",
+      setor:  usuario.setor  || "",
+      senha:  usuario.senha  || ""
+    };
     if (usuario._id) {
-      const { _id, ...dados } = usuario;
-      await db.collection("usuarios").doc(_id).set(dados);
+      await db.collection("usuarios").doc(usuario._id).set(dados);
     } else {
-      const ref = await db.collection("usuarios").add({ nome: usuario.nome, perfil: usuario.perfil });
+      const ref = await db.collection("usuarios").add(dados);
       usuario._id = ref.id;
     }
   } catch (err) { console.error("Erro ao salvar usuário:", err); }
@@ -367,7 +474,6 @@ async function excluirUsuarioFirebase(id) {
   catch (err) { console.error("Erro ao excluir usuário:", err); }
 }
 
-// Salva um responsável (criar ou atualizar)
 async function salvarResponsavel(resp) {
   try {
     if (resp._id) {
@@ -385,7 +491,6 @@ async function excluirResponsavelFirebase(id) {
   catch (err) { console.error("Erro ao excluir responsável:", err); }
 }
 
-// Salva um serviço (criar ou atualizar)
 async function salvarServicoCad(srv) {
   try {
     if (srv._id) {
@@ -403,7 +508,6 @@ async function excluirServicoFirebase(id) {
   catch (err) { console.error("Erro ao excluir serviço:", err); }
 }
 
-// Salva um ticket (criar ou atualizar)
 async function salvarTicket(ticket) {
   try {
     if (ticket._id) {
@@ -423,36 +527,21 @@ async function excluirTicketFirebase(id) {
   catch (err) { console.error("Erro ao excluir ticket:", err); }
 }
 
-// Função de compatibilidade — substitui a antiga salvar()
-// Salva TUDO de uma vez (usada como fallback)
+// Função de compatibilidade — salva TUDO de uma vez
 async function salvar() {
-  // Camada de compatibilidade: o CRM original chamava salvar() para persistir tudo.
-  // Aqui a gente sincroniza os arrays em memória com o Firestore.
-  // Observação: isso funciona sem login (regras em modo de teste / allow read, write: if true).
-
   if (!(window.db || (typeof db !== 'undefined' && db))) {
-    window.db = (typeof db !== 'undefined' ? db : undefined);
-    
     console.warn("Firebase/Firestore não inicializado — salvar() ignorado.");
     return;
   }
 
   async function _syncCollection(colName, arr) {
     const colRef = db.collection(colName);
-
-    // 1) Lê IDs existentes
     const snap = await colRef.get();
     const existentes = new Set(snap.docs.map(d => d.id));
+    const desejados  = new Set(arr.filter(x => x && x._id).map(x => x._id));
 
-    // 2) Monta mapa de IDs que devem existir após a sincronização
-    const desejados = new Set(arr.filter(x => x && x._id).map(x => x._id));
-
-    // 3) Deleta no Firestore o que não existe mais localmente
-    const paraDeletar = [...existentes].filter(id => !desejados.has(id));
-
-    // Batch (limite 500 operações)
     async function _commitEmLotes(ops) {
-      const LIMITE = 450; // margem
+      const LIMITE = 450;
       for (let i = 0; i < ops.length; i += LIMITE) {
         const batch = db.batch();
         ops.slice(i, i + LIMITE).forEach(fn => fn(batch));
@@ -460,10 +549,10 @@ async function salvar() {
       }
     }
 
+    const paraDeletar = [...existentes].filter(id => !desejados.has(id));
     const delOps = paraDeletar.map(id => (batch) => batch.delete(colRef.doc(id)));
     await _commitEmLotes(delOps);
 
-    // 4) Upsert dos itens com _id
     const upsertOps = arr
       .filter(x => x && x._id)
       .map(item => (batch) => {
@@ -472,31 +561,39 @@ async function salvar() {
       });
     await _commitEmLotes(upsertOps);
 
-    // 5) Cria documentos para itens sem _id e atualiza o array em memória
     for (const item of arr) {
-      if (!item) continue;
-      if (!item._id) {
-        const { _id, ...dados } = item;
-        const ref = await colRef.add(dados);
-        item._id = ref.id;
-      }
+      if (!item || item._id) continue;
+      const { _id, ...dados } = item;
+      const ref = await colRef.add(dados);
+      item._id = ref.id;
     }
   }
 
   try {
-    // Configurações (setores)
     await db.collection("configuracoes").doc("geral").set({ setores: setores || [] }, { merge: true });
-
-    // Sincroniza coleções principais
-    await _syncCollection("usuarios", usuarios || []);
-    await _syncCollection("responsaveis", responsaveis || []);
-    await _syncCollection("servicos", servicosCadastro || []);
-    await _syncCollection("tickets", tickets || []);
-
-    console.log("✅ salvar(): sincronização com Firestore concluída.");
+    await _syncCollection("usuarios",    usuarios        || []);
+    await _syncCollection("responsaveis",responsaveis   || []);
+    await _syncCollection("servicos",    servicosCadastro|| []);
+    await _syncCollection("tickets",     tickets         || []);
+    console.log("✅ salvar(): sincronização concluída.");
   } catch (err) {
-    console.error("❌ salvar(): erro ao sincronizar com Firestore:", err);
+    console.error("❌ salvar(): erro:", err);
   }
+}
+
+
+/* ============================================================
+   SIDEBAR MOBILE
+   ============================================================ */
+function toggleSidebar(){
+  const s = document.getElementById("mainSidebar");
+  const o = document.getElementById("sidebarOverlay");
+  s.classList.toggle("open");
+  o.classList.toggle("open");
+}
+function closeSidebar(){
+  document.getElementById("mainSidebar").classList.remove("open");
+  document.getElementById("sidebarOverlay").classList.remove("open");
 }
 
 
@@ -504,27 +601,68 @@ async function salvar() {
    LOGIN / LOGOUT
    ============================================================ */
 function carregarLogin(){
-  document.getElementById("loginUser").innerHTML =
-    usuarios.map((u,i)=>`<option value="${i}">${u.nome} (${u.perfil})</option>`).join("");
+  // Apenas foca o campo de usuário ao mostrar a tela de login
+  setTimeout(()=>{
+    const el = document.getElementById("loginUserName");
+    if(el) el.focus();
+  }, 100);
 }
 
 function login(){
-  const idx = parseInt(document.getElementById("loginUser").value);
-  usuarioLogado = usuarios[idx];
+  const nomeDigitado = (document.getElementById("loginUserName").value || "").trim();
+  const senhaDigitada= document.getElementById("loginPassword").value || "";
+  const errEl        = document.getElementById("loginError");
+
+  if(!nomeDigitado){
+    errEl.style.display="block";
+    errEl.textContent="⚠ Informe o nome de usuário.";
+    return;
+  }
+
+  // Busca usuário (case-insensitive no nome)
+  const u = usuarios.find(x =>
+    (x.nome||"").toLowerCase() === nomeDigitado.toLowerCase() &&
+    (x.senha||"") === senhaDigitada
+  );
+
+  if(!u){
+    errEl.style.display="block";
+    errEl.textContent="⚠ Usuário ou senha incorretos.";
+    document.getElementById("loginPassword").value="";
+    return;
+  }
+
+  errEl.style.display="none";
+  usuarioLogado = u;
+
   document.getElementById("loginScreen").style.display = "none";
   document.getElementById("crmApp").style.display      = "flex";
+
   document.getElementById("usuarioInfo").innerHTML = "Usuário: <b>"+escHtml(usuarioLogado.nome)+"</b>";
-  document.getElementById("perfilInfo").innerHTML  = "Perfil: <b>"+escHtml(usuarioLogado.perfil)+"</b>";
+  document.getElementById("perfilInfo").innerHTML  =
+    "Perfil: <span class='perfil-badge-"+usuarioLogado.perfil+"'>"+escHtml(usuarioLogado.perfil==="adm"?"ADM":"Auxiliar")+"</span>";
+  document.getElementById("setorInfo").innerHTML   =
+    usuarioLogado.setor ? "Setor: <b>"+escHtml(usuarioLogado.setor)+"</b>" : "";
+
+  // Controle de visibilidade: Auxiliar não vê o menu Cadastros
+  document.getElementById("btnCadastros").style.display =
+    usuarioLogado.perfil === "adm" ? "block" : "none";
+
   atualizarSeletorVisao();
   mostrarTickets();
 }
 
 function logout(){
   usuarioLogado = null;
+  document.getElementById("loginUserName").value = "";
+  document.getElementById("loginPassword").value = "";
+  document.getElementById("loginError").style.display = "none";
   document.getElementById("crmApp").style.display      = "none";
   document.getElementById("loginScreen").style.display = "flex";
   document.getElementById("conteudo").innerHTML = "";
+  closeSidebar();
 }
+
 
 /* ============================================================
    VISÃO / SETOR
@@ -542,9 +680,9 @@ function atualizarSeletorVisao(){
   }
 }
 
+// Retorna o setor do usuário logado diretamente do seu cadastro
 function setorDoUsuario(){
-  const r = responsaveis.find(r => r.nome === usuarioLogado.nome);
-  return r ? r.setor : "";
+  return usuarioLogado.setor || "";
 }
 
 function ticketsVisiveis(){
@@ -552,57 +690,44 @@ function ticketsVisiveis(){
     const visao = document.getElementById("filtroVisao")?.value || "todos";
     return visao === "todos" ? [...tickets] : tickets.filter(t => t.setor === visao);
   }
+  // Auxiliar: vê apenas tickets do seu setor
   const setor = setorDoUsuario();
   return tickets.filter(t => t.setor === setor);
 }
 
+
 /* ============================================================
    LÓGICA DE ALERTAS
    ============================================================ */
-
-// Verifica se algum serviço foi marcado como INICIADO (mas não todos finalizados)
 function temServicoIniciado(t){
   return (t.servicosTicket||[]).some(s => s.iniciado?.marcado && !s.finalizado?.marcado);
 }
-
-// Verifica se algum checkbox foi marcado (iniciado ou finalizado)
 function temCheckboxMarcado(t){
   return (t.servicosTicket||[]).some(s => s.iniciado?.marcado || s.finalizado?.marcado);
 }
-
-// Retorna quantas horas se passaram desde a última atualização do ticket
 function horasDesdeUltimaAtualizacao(t){
   const ref = t.ultimaAtualizacao || t.dataAbertura;
   if(!ref) return 0;
   return (new Date() - new Date(ref)) / 3600000;
 }
-
-// Alerta 48h: ticket tem serviço iniciado E última atualização > 48h
 function precisaAtualizacao48h(t){
   if(t.status === "Concluído" || t.status === "Cancelado") return false;
   if(!temServicoIniciado(t)) return false;
   return horasDesdeUltimaAtualizacao(t) >= 48;
 }
-
-// Situação "Em Aberto com andamento": ticket tem serviços INICIADOS mas não concluído
 function estaEmAberto(t){
   if(t.status==="Concluído"||t.status==="Cancelado") return false;
   const srvs = t.servicosTicket||[];
   if(!srvs.length) return false;
-  // Tem pelo menos 1 iniciado E nenhum finalizado ainda
   return srvs.some(s=>s.iniciado?.marcado) && !srvs.some(s=>s.finalizado?.marcado);
 }
-
-// Situação "Liberado Parcialmente": ticket tem pelo menos 1 finalizado, mas não todos
 function estaLiberadoParcialmente(t){
   if(t.status==="Concluído"||t.status==="Cancelado") return false;
   const srvs = t.servicosTicket||[];
-  if(srvs.length<2) return false; // precisa de pelo menos 2 serviços para ser parcial
+  if(srvs.length<2) return false;
   const qtdFin = srvs.filter(s=>s.finalizado?.marcado).length;
   return qtdFin>0 && qtdFin<srvs.length;
 }
-
-// NOVO — Alerta 24h: ticket no Credenciamento, com serviços, sem nenhum INICIADO, há mais de 24h
 function precisaIniciarCredenciamento(t){
   if(t.status === "Concluído" || t.status === "Cancelado") return false;
   const noCredenciamento = (t.setor||"").toLowerCase().includes("credenci");
@@ -614,23 +739,24 @@ function precisaIniciarCredenciamento(t){
   if(!ref) return false;
   return (new Date() - new Date(ref)) / 3600000 >= 24;
 }
-
-// NOVO — Pendência do Cliente: ticket com status "Aguardando cliente" e registro de pendência
 function estaPendenciaCliente(t){
   return t.status === "Aguardando cliente";
 }
-
-// Retorna horas desde que chegou ao Credenciamento
 function horasNoCredenciamento(t){
   const ref = t.dataChegadaCredenciamento || t.dataAbertura;
   if(!ref) return 0;
   return (new Date() - new Date(ref)) / 3600000;
 }
 
+
 /* ============================================================
-   CADASTROS
+   CADASTROS — apenas para ADM
    ============================================================ */
 function mostrarCadastros(){
+  if(usuarioLogado.perfil !== "adm"){
+    alert("Acesso restrito. Apenas administradores podem acessar os cadastros.");
+    return;
+  }
   document.getElementById("conteudo").innerHTML = `
     <div class="card">
       <h2 style="margin-top:0;">Cadastros</h2>
@@ -680,7 +806,7 @@ function salvarServico(i){
   const sla  = parseInt(document.getElementById("ed-ss-"+i).value);
   if(!nome){ alert("Nome não pode ser vazio."); return; }
   if(!sla||sla<=0){ alert("SLA deve ser maior que zero."); return; }
-  servicosCadastro[i]={nome,sla}; salvar();
+  servicosCadastro[i]={...servicosCadastro[i],nome,sla}; salvar();
   const row = document.getElementById("srv-cad-"+i);
   if(row){row.style.background="#d4edda";setTimeout(()=>row.style.background="",1000);}
 }
@@ -717,18 +843,18 @@ function addSetor(){
 function abaResponsaveis(){
   document.getElementById("abaConteudo").innerHTML = `
     <h3>Responsáveis</h3>
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
-      <input id="novoRespNome" placeholder="Nome" style="flex:1;">
-      <select id="novoRespSetor" style="flex:1;">
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
+      <input id="novoRespNome" placeholder="Nome" style="flex:1;min-width:120px;">
+      <select id="novoRespSetor" style="flex:1;min-width:120px;">
         ${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}
       </select>
       <button class="btn-success" onclick="addResponsavel()">+ Adicionar</button>
     </div>
     <ul style="padding:0;list-style:none;">
       ${responsaveis.map((r,i)=>`
-        <li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-          <input value="${escHtml(r.nome)}" onchange="responsaveis[${i}].nome=this.value;salvar()" style="flex:1;">
-          <select onchange="responsaveis[${i}].setor=this.value;salvar()" style="flex:1;">
+        <li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;">
+          <input value="${escHtml(r.nome)}" onchange="responsaveis[${i}].nome=this.value;salvar()" style="flex:1;min-width:100px;">
+          <select onchange="responsaveis[${i}].setor=this.value;salvar()" style="flex:1;min-width:100px;">
             ${setores.map(s=>`<option ${s===r.setor?"selected":""}>${escHtml(s)}</option>`).join("")}
           </select>
           <button class="btn-danger" onclick="responsaveis.splice(${i},1);salvar();abaResponsaveis()">Excluir</button>
@@ -747,33 +873,113 @@ function addResponsavel(){
 function abaUsuarios(){
   document.getElementById("abaConteudo").innerHTML = `
     <h3>Usuários</h3>
-    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
-      <input id="novoUserNome" placeholder="Nome" style="flex:1;">
-      <select id="novoUserPerfil" style="flex:1;">
-        <option value="usuario">Usuário</option>
-        <option value="adm">ADM</option>
-      </select>
-      <button class="btn-success" onclick="addUsuario()">+ Adicionar</button>
+    <div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#4e73df;">
+      <b>📋 Perfis:</b><br>
+      🔵 <b>ADM</b> — Acesso total (tickets + cadastros + exclusão)<br>
+      ⚪ <b>Auxiliar</b> — Acesso apenas aos tickets do seu setor (sem cadastros, sem excluir tickets)
     </div>
-    <ul style="padding:0;list-style:none;">
-      ${usuarios.map((u,i)=>`
-        <li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
-          <input value="${escHtml(u.nome)}" onchange="usuarios[${i}].nome=this.value;salvar();carregarLogin()" style="flex:1;">
-          <select onchange="usuarios[${i}].perfil=this.value;salvar();carregarLogin()" style="flex:1;">
-            <option value="usuario" ${u.perfil==="usuario"?"selected":""}>Usuário</option>
-            <option value="adm"     ${u.perfil==="adm"?"selected":""}>ADM</option>
+    <div style="background:#f4f6fb;border-radius:8px;padding:12px;margin-bottom:14px;">
+      <b style="font-size:13px;">Adicionar novo usuário:</b>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-top:8px;">
+        <div>
+          <label style="font-size:11px;color:#666;">Nome</label>
+          <input id="novoUserNome" placeholder="Nome do usuário">
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666;">Perfil</label>
+          <select id="novoUserPerfil">
+            <option value="auxiliar">Auxiliar</option>
+            <option value="adm">ADM</option>
           </select>
-          <button class="btn-danger" onclick="usuarios.splice(${i},1);salvar();carregarLogin();abaUsuarios()">Excluir</button>
-        </li>`).join("")}
-    </ul>`;
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666;">Setor</label>
+          <select id="novoUserSetor">
+            <option value="">-- Nenhum --</option>
+            ${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label style="font-size:11px;color:#666;">Senha</label>
+          <input id="novoUserSenha" type="password" placeholder="Senha de acesso">
+        </div>
+      </div>
+      <button class="btn-success" style="margin-top:10px;" onclick="addUsuario()">+ Adicionar Usuário</button>
+    </div>
+
+    <div style="font-size:12px;color:#888;margin-bottom:8px;">Usuários cadastrados (${usuarios.length}):</div>
+    ${usuarios.map((u,i)=>`
+      <div style="border:1px solid #e3e6f0;border-radius:8px;padding:12px;margin-bottom:10px;background:white;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+          <b style="font-size:14px;">${escHtml(u.nome)}</b>
+          <span class="perfil-badge-${u.perfil}">${u.perfil==="adm"?"ADM":"Auxiliar"}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;">
+          <div>
+            <label style="font-size:11px;color:#666;">Nome</label>
+            <input id="eu-nome-${i}" value="${escHtml(u.nome)}">
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;">Perfil</label>
+            <select id="eu-perfil-${i}">
+              <option value="auxiliar" ${u.perfil==="auxiliar"?"selected":""}>Auxiliar</option>
+              <option value="adm"      ${u.perfil==="adm"?"selected":""}>ADM</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;">Setor</label>
+            <select id="eu-setor-${i}">
+              <option value="">-- Nenhum --</option>
+              ${setores.map(s=>`<option ${s===u.setor?"selected":""}>${escHtml(s)}</option>`).join("")}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#666;">Nova senha (deixe em branco para manter)</label>
+            <input id="eu-senha-${i}" type="password" placeholder="••••••">
+          </div>
+        </div>
+        <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn-info" onclick="salvarEdicaoUsuario(${i})">💾 Salvar</button>
+          <button class="btn-danger" onclick="excluirUsuario(${i})">🗑 Excluir</button>
+        </div>
+      </div>`).join("")}`;
+}
+
+function salvarEdicaoUsuario(i){
+  const nome   = document.getElementById("eu-nome-"+i).value.trim();
+  const perfil = document.getElementById("eu-perfil-"+i).value;
+  const setor  = document.getElementById("eu-setor-"+i).value;
+  const novaSenha = document.getElementById("eu-senha-"+i).value;
+  if(!nome){ alert("Nome não pode ser vazio."); return; }
+  usuarios[i].nome   = nome;
+  usuarios[i].perfil = perfil;
+  usuarios[i].setor  = setor;
+  if(novaSenha !== "") usuarios[i].senha = novaSenha;
+  salvarUsuario(usuarios[i]);
+  const row = document.querySelector(`#eu-nome-${i}`)?.closest("div[style*='border']");
+  if(row){row.style.background="#d4edda";setTimeout(()=>row.style.background="white",1000);}
 }
 
 function addUsuario(){
   const nome   = document.getElementById("novoUserNome").value.trim();
   const perfil = document.getElementById("novoUserPerfil").value;
+  const setor  = document.getElementById("novoUserSetor").value;
+  const senha  = document.getElementById("novoUserSenha").value;
   if(!nome){ alert("Informe o nome."); return; }
-  usuarios.push({nome,perfil}); salvar(); carregarLogin(); abaUsuarios();
+  const novo = {nome, perfil, setor, senha};
+  usuarios.push(novo);
+  salvarUsuario(novo);
+  abaUsuarios();
 }
+
+async function excluirUsuario(i){
+  if(!confirm(`Excluir o usuário "${usuarios[i].nome}"?`)) return;
+  const u = usuarios[i];
+  if(u._id) await excluirUsuarioFirebase(u._id);
+  usuarios.splice(i,1);
+  abaUsuarios();
+}
+
 
 /* ============================================================
    TICKETS — LISTA
@@ -781,7 +987,7 @@ function addUsuario(){
 function mostrarTickets(){
   const lista = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
 
-  const atrasados = lista.filter(t=>{
+  const atrasados     = lista.filter(t=>{
     if(t.status==="Concluído"||t.status==="Cancelado") return false;
     const s = calcularSLARestante(t); return s&&s.atrasado;
   }).length;
@@ -789,44 +995,52 @@ function mostrarTickets(){
   const semIniciar24  = lista.filter(t=>precisaIniciarCredenciamento(t)).length;
   const qtdEmAberto   = lista.filter(t=>estaEmAberto(t)).length;
   const qtdLibParcial = lista.filter(t=>estaLiberadoParcialmente(t)).length;
-  const qtdPendCliente = lista.filter(t=>estaPendenciaCliente(t)).length;
+  const qtdPendCliente= lista.filter(t=>estaPendenciaCliente(t)).length;
 
   document.getElementById("conteudo").innerHTML = `
     <div class="resumo-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:10px;">
-      <div class="resumo-card" style="background:#4e73df;cursor:pointer;" title="Em aberto" onclick="filtroRapido('abertos')">
-        <div class="resumo-num">${lista.filter(t=>t.status!=="Concluído"&&t.status!=="Cancelado").length}</div><div class="resumo-label">Em Aberto</div>
+      <div class="resumo-card" style="background:#4e73df;cursor:pointer;" onclick="filtroRapido('abertos')">
+        <div class="resumo-num">${lista.filter(t=>t.status!=="Concluído"&&t.status!=="Cancelado").length}</div>
+        <div class="resumo-label">Em Aberto</div>
       </div>
-      <div class="resumo-card" style="background:#1cc88a;cursor:pointer;" title="Ver concluídos" onclick="filtroRapido('concluidos')">
-        <div class="resumo-num">${lista.filter(t=>t.status==="Concluído").length}</div><div class="resumo-label">Concluídos</div>
+      <div class="resumo-card" style="background:#1cc88a;cursor:pointer;" onclick="filtroRapido('concluidos')">
+        <div class="resumo-num">${lista.filter(t=>t.status==="Concluído").length}</div>
+        <div class="resumo-label">Concluídos</div>
       </div>
-      <div class="resumo-card" style="background:#36b9cc;cursor:pointer;" title="Em Aberto no Credenciamento" onclick="filtroRapido('em_aberto_cred')">
-        <div class="resumo-num">${qtdEmAberto}</div><div class="resumo-label">Em Aberto (Cred.)</div>
+      <div class="resumo-card" style="background:#36b9cc;cursor:pointer;" onclick="filtroRapido('em_aberto_cred')">
+        <div class="resumo-num">${qtdEmAberto}</div>
+        <div class="resumo-label">Em Aberto (Cred.)</div>
       </div>
-      <div class="resumo-card" style="background:#fd7e14;cursor:pointer;" title="Liberado Parcialmente" onclick="filtroRapido('lib_parcial')">
-        <div class="resumo-num">${qtdLibParcial}</div><div class="resumo-label">Lib. Parcialmente</div>
+      <div class="resumo-card" style="background:#fd7e14;cursor:pointer;" onclick="filtroRapido('lib_parcial')">
+        <div class="resumo-num">${qtdLibParcial}</div>
+        <div class="resumo-label">Lib. Parcialmente</div>
       </div>
-      <div class="resumo-card" style="background:#e91e8c;cursor:pointer;" title="Pendência do Cliente" onclick="filtroRapido('pend_cliente')">
-        <div class="resumo-num">${qtdPendCliente}</div><div class="resumo-label">Pend. Cliente</div>
+      <div class="resumo-card" style="background:#e91e8c;cursor:pointer;" onclick="filtroRapido('pend_cliente')">
+        <div class="resumo-num">${qtdPendCliente}</div>
+        <div class="resumo-label">Pend. Cliente</div>
       </div>
     </div>
     <div class="resumo-grid" style="grid-template-columns:repeat(3,1fr);">
-      <div class="resumo-card" style="background:#e74a3b;cursor:pointer;" title="Ver atrasados" onclick="filtroRapido('atrasados_sla')">
-        <div class="resumo-num">${atrasados}</div><div class="resumo-label">Atrasados SLA</div>
+      <div class="resumo-card" style="background:#e74a3b;cursor:pointer;" onclick="filtroRapido('atrasados_sla')">
+        <div class="resumo-num">${atrasados}</div>
+        <div class="resumo-label">Atrasados SLA</div>
       </div>
-      <div class="resumo-card" style="background:#c0392b;cursor:pointer;" title="Ver sem iniciar" onclick="filtroRapido('sem_iniciar_24')">
-        <div class="resumo-num">${semIniciar24}</div><div class="resumo-label">Cred. 24h s/ iniciar</div>
+      <div class="resumo-card" style="background:#c0392b;cursor:pointer;" onclick="filtroRapido('sem_iniciar_24')">
+        <div class="resumo-num">${semIniciar24}</div>
+        <div class="resumo-label">Cred. 24h s/ iniciar</div>
       </div>
-      <div class="resumo-card" style="background:#f6c23e;color:#000;cursor:pointer;" title="Ver aguardando atualização" onclick="filtroRapido('alerta_48')">
-        <div class="resumo-num">${pendentes48}</div><div class="resumo-label">Aguard. Atualiz. (48h)</div>
+      <div class="resumo-card" style="background:#f6c23e;color:#000;cursor:pointer;" onclick="filtroRapido('alerta_48')">
+        <div class="resumo-num">${pendentes48}</div>
+        <div class="resumo-label">Aguard. Atualiz. (48h)</div>
       </div>
     </div>
 
     <div class="card" style="border-left-color:#4e73df;">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div class="filtros-row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
         <h2 style="margin:0;">🎫 Tickets</h2>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-          <input id="buscaTicket" placeholder="🔍 Buscar..." style="width:180px;margin:0;" oninput="filtrarTickets()">
-          <select id="filtroStatus" onchange="filtrarTickets()" style="width:175px;margin:0;">
+          <input id="buscaTicket" placeholder="🔍 Buscar..." style="width:160px;margin:0;" oninput="filtrarTickets()">
+          <select id="filtroStatus" onchange="filtrarTickets()" style="width:160px;margin:0;">
             <option value="">Todos os status</option>
             <option>Aberto</option>
             <option>Em andamento</option>
@@ -834,7 +1048,7 @@ function mostrarTickets(){
             <option>Concluído</option>
             <option>Cancelado</option>
           </select>
-          <select id="filtroAlerta" onchange="filtrarTickets()" style="width:215px;margin:0;">
+          <select id="filtroAlerta" onchange="filtrarTickets()" style="width:200px;margin:0;">
             <option value="">Todas as situações</option>
             <option value="abertos">📋 Em aberto (sem serviços)</option>
             <option value="em_aberto_cred">🔵 Em Aberto (Cred. s/ finaliz.)</option>
@@ -846,19 +1060,19 @@ function mostrarTickets(){
             <option value="iniciados">🔵 Em andamento (Cred.)</option>
             <option value="concluidos">✅ Concluídos</option>
           </select>
-          <button class="btn-dark" onclick="limparFiltros()" style="padding:6px 10px;white-space:nowrap;">✕ Limpar</button>
+          <button class="btn-dark" onclick="limparFiltros()" style="padding:6px 10px;">✕</button>
         </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
-        <span id="contadorTickets" style="font-size:12px;color:#888;">${lista.length} ticket(s) encontrado(s)</span>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+        <span id="contadorTickets" style="font-size:12px;color:#888;">${lista.length} ticket(s)</span>
+        <div class="quick-filters" style="display:flex;gap:5px;flex-wrap:wrap;">
           <button class="btn-success"  style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('abertos')">📋 Em aberto</button>
-          <button class="btn-info"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('em_aberto_cred')">🔵 Em Aberto Cred.</button>
-          <button class="btn-orange"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('lib_parcial')">🟠 Lib. Parcial</button>
-          <button class="btn-pink"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('pend_cliente')">💗 Pend. Cliente</button>
+          <button class="btn-info"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('em_aberto_cred')">🔵 Cred.</button>
+          <button class="btn-orange"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('lib_parcial')">🟠 Parcial</button>
+          <button class="btn-pink"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('pend_cliente')">💗 Cliente</button>
           <button class="btn-danger"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('atrasados_sla')">🔴 Atrasados</button>
           <button class="btn-warning"  style="font-size:11px;padding:3px 8px;color:#000;" onclick="filtroRapido('alerta_48')">🟡 48h</button>
-          <button style="background:#1cc88a;font-size:11px;padding:3px 8px;border:none;border-radius:6px;cursor:pointer;color:white;" onclick="filtroRapido('concluidos')">✅ Concluídos</button>
+          <button style="background:#1cc88a;font-size:11px;padding:3px 8px;border:none;border-radius:6px;cursor:pointer;color:white;" onclick="filtroRapido('concluidos')">✅</button>
         </div>
       </div>
       <div id="listaTickets">${renderListaTickets(lista)}</div>
@@ -869,13 +1083,9 @@ function filtrarTickets(){
   const busca  = (document.getElementById("buscaTicket")?.value||"").toLowerCase();
   const status = document.getElementById("filtroStatus")?.value||"";
   const alerta = document.getElementById("filtroAlerta")?.value||"";
+  let lista    = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
 
-  let lista = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
-
-  // Filtro por status
   if(status) lista = lista.filter(t => t.status === status);
-
-  // Filtro por situação/alerta
   if(alerta === "abertos"){
     lista = lista.filter(t => t.status !== "Concluído" && t.status !== "Cancelado");
   } else if(alerta === "em_aberto_cred"){
@@ -899,17 +1109,14 @@ function filtrarTickets(){
     lista = lista.filter(t => t.status === "Concluído" || t.status === "Cancelado");
   }
 
-  // Filtro por texto
   if(busca) lista = lista.filter(t =>
     (t.titulo||"").toLowerCase().includes(busca)||
     (t.cliente||"").toLowerCase().includes(busca)||
     (t.id||"").toLowerCase().includes(busca)||
     (t.responsavel||"").toLowerCase().includes(busca));
 
-  // Atualiza contagem acima da lista
   const contEl = document.getElementById("contadorTickets");
-  if(contEl) contEl.textContent = `${lista.length} ticket(s) encontrado(s)`;
-
+  if(contEl) contEl.textContent = `${lista.length} ticket(s)`;
   document.getElementById("listaTickets").innerHTML = renderListaTickets(lista);
 }
 
@@ -937,26 +1144,15 @@ function renderListaTickets(lista){
   if(!lista.length) return '<p style="color:#999;text-align:center;padding:30px 0;">Nenhum ticket encontrado.</p>';
 
   return lista.map(t=>{
-    const sla      = calcularSLARestante(t);
-    const atrasado = sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
-    const iniciado       = temServicoIniciado(t);
-    const alerta48       = precisaAtualizacao48h(t);
-    const semIniciar     = precisaIniciarCredenciamento(t);
-    const emAberto       = estaEmAberto(t);
-    const libParcial     = estaLiberadoParcialmente(t);
-    const pendCliente    = estaPendenciaCliente(t);
+    const sla          = calcularSLARestante(t);
+    const atrasado     = sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
+    const iniciado     = temServicoIniciado(t);
+    const alerta48     = precisaAtualizacao48h(t);
+    const semIniciar   = precisaIniciarCredenciamento(t);
+    const emAberto     = estaEmAberto(t);
+    const libParcial   = estaLiberadoParcialmente(t);
+    const pendCliente  = estaPendenciaCliente(t);
 
-    /*
-      Prioridade de cor da borda:
-      1. Atrasado SLA                        → vermelho vivo  (#e74a3b)
-      2. Credenciamento 24h sem INICIADO     → vermelho escuro (#c0392b)
-      3. Alerta 48h sem atualização          → amarelo        (#f6c23e)
-      4. Pendência do Cliente                → pink           (#e91e8c)
-      5. Liberado Parcialmente               → laranja        (#fd7e14)
-      6. Em Aberto (iniciado, s/ finalizado) → azul claro     (#36b9cc)
-      7. Serviço iniciado (sinal Comercial)  → azul           (#4e73df)
-      8. Padrão                              → cor do status
-    */
     let bordaColor, bgColor;
     if(atrasado){
       bordaColor="#e74a3b"; bgColor="#fff8f8";
@@ -983,32 +1179,31 @@ function renderListaTickets(lista){
 
     const srvs    = t.servicosTicket||[];
     const qtdFin  = srvs.filter(s=>s.finalizado?.marcado).length;
-    const srvBadge = srvs.length>0
+    const srvBadge= srvs.length>0
       ?`<span style="font-size:11px;color:#4e73df;margin-left:4px;">📦 ${qtdFin}/${srvs.length} finalizados</span>`
       :"";
 
-    // Badge de situação — prioridade visual clara
     let estadoBadge = "";
     if(semIniciar){
       const hCred = Math.round(horasNoCredenciamento(t));
-      estadoBadge = `<span class="badge" style="background:#c0392b;color:white;margin-left:4px;">🔴 ${hCred}h sem INICIAR (Cred.)</span>`;
+      estadoBadge = `<span class="badge" style="background:#c0392b;color:white;margin-left:4px;">🔴 ${hCred}h sem INICIAR</span>`;
     } else if(alerta48){
-      estadoBadge = `<span class="alerta-48h">⏰ Atualização necessária (48h)</span>`;
+      estadoBadge = `<span class="alerta-48h">⏰ Atualizar (48h)</span>`;
     } else if(pendCliente){
-      estadoBadge = `<span class="badge" style="background:#e91e8c;color:white;margin-left:4px;">💗 Pendência do Cliente</span>`;
+      estadoBadge = `<span class="badge" style="background:#e91e8c;color:white;margin-left:4px;">💗 Pend. Cliente</span>`;
     } else if(libParcial){
-      estadoBadge = `<span class="badge" style="background:#fd7e14;color:white;margin-left:4px;">🟠 Liberado Parcialmente (${qtdFin}/${srvs.length})</span>`;
+      estadoBadge = `<span class="badge" style="background:#fd7e14;color:white;margin-left:4px;">🟠 Lib. Parcial (${qtdFin}/${srvs.length})</span>`;
     } else if(emAberto){
       estadoBadge = `<span class="badge" style="background:#36b9cc;color:white;margin-left:4px;">🔵 Em Aberto (Cred.)</span>`;
     } else if(iniciado){
-      estadoBadge = `<span class="badge" style="background:#4e73df;color:white;margin-left:4px;">🔵 Em andamento (Cred.)</span>`;
+      estadoBadge = `<span class="badge" style="background:#4e73df;color:white;margin-left:4px;">🔵 Em andamento</span>`;
     }
 
     return `
       <div class="ticket-card" style="border-left:5px solid ${bordaColor};background:${bgColor};"
            onclick="verTicket('${t.id}')">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
-          <div style="min-width:0;">
+          <div style="min-width:0;flex:1;">
             <span style="font-size:11px;color:#aaa;">#${t.id}</span>
             <strong style="display:block;font-size:14px;margin:2px 0;">${escHtml(t.titulo)}</strong>
             <span style="font-size:12px;color:#666;">${escHtml(t.cliente||"")} &bull; ${escHtml(t.setor||"")} &bull; ${escHtml(t.responsavel||"Sem responsável")}</span>
@@ -1033,6 +1228,7 @@ function renderListaTickets(lista){
   }).join("");
 }
 
+
 /* ============================================================
    NOVO TICKET
    ============================================================ */
@@ -1040,11 +1236,11 @@ function novoTicket(){
   _srvTemp=[];
   document.getElementById("conteudo").innerHTML = `
     <div class="card" style="border-left-color:#4e73df;max-width:760px;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap;">
         <button class="btn-dark" onclick="mostrarTickets()">← Voltar</button>
         <h2 style="margin:0;">Novo Ticket</h2>
       </div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="grid-2col">
 
         <div style="grid-column:1/-1;">
           <label><b>Título / Assunto *</b></label>
@@ -1088,11 +1284,10 @@ function novoTicket(){
           </select>
         </div>
 
-        <!-- SERVIÇOS -->
         <div style="grid-column:1/-1;">
           <label><b>Serviços do Ticket</b></label>
-          <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;">
-            <select id="nt_srv_sel" style="flex:1;margin:0;">
+          <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;flex-wrap:wrap;">
+            <select id="nt_srv_sel" style="flex:1;margin:0;min-width:150px;">
               <option value="">-- Selecione um serviço --</option>
               ${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA: ${s.sla}h)</option>`).join("")}
             </select>
@@ -1110,7 +1305,7 @@ function novoTicket(){
           <textarea id="nt_obs" rows="2" placeholder="Notas internas (não visível ao cliente)"></textarea>
         </div>
       </div>
-      <div style="margin-top:18px;display:flex;gap:10px;">
+      <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-success" onclick="salvarNovoTicket()">✔ Criar Ticket</button>
         <button class="btn-dark"    onclick="mostrarTickets()">Cancelar</button>
       </div>
@@ -1178,10 +1373,11 @@ async function salvarNovoTicket(){
     historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]
   };
   tickets.unshift(ticket);
-await salvarTicket(ticket);
-_srvTemp=[];
+  await salvarTicket(ticket);
+  _srvTemp=[];
   mostrarTickets();
 }
+
 
 /* ============================================================
    VER / EDITAR TICKET
@@ -1190,6 +1386,7 @@ function verTicket(id){
   const t=tickets.find(x=>x.id===id);
   if(!t){alert("Ticket não encontrado.");return;}
 
+  const isAdm       = usuarioLogado.perfil === "adm";
   const sla         =calcularSLARestante(t);
   const atrasado    =sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
   const iniciado    =temServicoIniciado(t);
@@ -1222,30 +1419,30 @@ function verTicket(id){
         <span class="badge" style="background:${corStatus(t.status)};color:white;">${t.status}</span>
         <span class="badge" style="background:${corPrioridade(t.prioridade)};color:${t.prioridade==="Alta"?"#000":"white"};">${t.prioridade}</span>
         ${atrasado?'<span class="badge" style="background:#e74a3b;color:white;">⚠ ATRASADO SLA</span>':""}
-        ${semIniciar?`<span class="badge" style="background:#c0392b;color:white;">🔴 ${hNoCred}h no Cred. sem INICIAR</span>`:""}
-        ${alerta48&&!semIniciar?`<span class="alerta-48h">⏰ Atualizar agora (${Math.round(hDesde)}h sem update)</span>`:""}
-        ${libParcial&&!alerta48&&!semIniciar?(()=>{const srvs=t.servicosTicket||[];const q=srvs.filter(s=>s.finalizado?.marcado).length;return `<span class="badge" style="background:#fd7e14;color:white;">🟠 Liberado Parcialmente (${q}/${srvs.length})</span>`;})():""}
-        ${pendCliente&&!alerta48&&!semIniciar?'<span class="badge" style="background:#e91e8c;color:white;">💗 Pendência do Cliente</span>':""}
+        ${semIniciar?`<span class="badge" style="background:#c0392b;color:white;">🔴 ${hNoCred}h sem INICIAR</span>`:""}
+        ${alerta48&&!semIniciar?`<span class="alerta-48h">⏰ Atualizar (${Math.round(hDesde)}h)</span>`:""}
+        ${libParcial&&!alerta48&&!semIniciar?(()=>{const srvs=t.servicosTicket||[];const q=srvs.filter(s=>s.finalizado?.marcado).length;return `<span class="badge" style="background:#fd7e14;color:white;">🟠 Lib. Parcial (${q}/${srvs.length})</span>`;})():""}
+        ${pendCliente&&!alerta48&&!semIniciar?'<span class="badge" style="background:#e91e8c;color:white;">💗 Pend. Cliente</span>':""}
         ${emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#36b9cc;color:white;">🔵 Em Aberto (Cred.)</span>':""}
-        ${iniciado&&!emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#4e73df;color:white;">🔵 Em andamento (Cred.)</span>':""}
+        ${iniciado&&!emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#4e73df;color:white;">🔵 Em andamento</span>':""}
       </div>
       <div style="font-size:12px;color:#888;margin-bottom:16px;">
         Aberto por <b>${escHtml(t.abertoPor)}</b> em ${formatarData(t.dataAbertura)} &bull; Canal: ${escHtml(t.canal||"-")}
         &bull; Última atualização: <b>${formatarData(t.ultimaAtualizacao)}</b>
-        ${t.dataChegadaCredenciamento?`&bull; Chegou ao Credenciamento: <b>${formatarData(t.dataChegadaCredenciamento)}</b>`:""}
+        ${t.dataChegadaCredenciamento?`&bull; Chegou ao Cred.: <b>${formatarData(t.dataChegadaCredenciamento)}</b>`:""}
       </div>
 
       ${semIniciar?`
       <div style="background:#fdf0f0;border:1px solid #c0392b;border-radius:8px;padding:12px;margin-bottom:14px;">
-        <b style="color:#c0392b;">🔴 Atenção! ${hNoCred}h sem ninguém iniciar os serviços!</b><br>
-        <span style="font-size:12px;color:#7b241c;">Este ticket chegou ao Credenciamento há ${hNoCred}h e nenhum serviço foi marcado como INICIADO. Atribua um responsável e inicie o atendimento.</span>
+        <b style="color:#c0392b;">🔴 Atenção! ${hNoCred}h sem iniciar os serviços!</b><br>
+        <span style="font-size:12px;color:#7b241c;">Este ticket chegou ao Credenciamento há ${hNoCred}h e nenhum serviço foi marcado como INICIADO.</span>
       </div>`:""}
 
       ${alerta48&&!semIniciar?`
-      <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:8px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+      <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:8px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
         <div>
           <b>⏰ Este ticket precisa de uma atualização!</b><br>
-          <span style="font-size:12px;color:#856404;">Passaram ${Math.round(hDesde)}h desde a última atualização. Registre o que está acontecendo.</span>
+          <span style="font-size:12px;color:#856404;">Passaram ${Math.round(hDesde)}h desde a última atualização.</span>
         </div>
         <button class="btn-warning" style="color:#000;flex-shrink:0;" onclick="abrirModalAtualizacao('${t.id}')">Registrar Atualização</button>
       </div>`:""}
@@ -1259,7 +1456,7 @@ function verTicket(id){
         </div>
       </div>`:""}
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="grid-2col">
 
         <div style="grid-column:1/-1;">
           <label><b>Título</b></label>
@@ -1307,15 +1504,17 @@ function verTicket(id){
         <!-- SERVIÇOS COM CHECKBOXES -->
         <div style="grid-column:1/-1;">
           <label><b>Serviços do Ticket</b></label>
-          <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;">
-            <select id="vt_srv_sel" style="flex:1;margin:0;">
+          <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;flex-wrap:wrap;">
+            <select id="vt_srv_sel" style="flex:1;margin:0;min-width:150px;">
               <option value="">-- Adicionar serviço --</option>
               ${servicosCadastro.map(s=>
                 `<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA: ${s.sla}h)</option>`).join("")}
             </select>
             <button class="btn-info" onclick="adicionarSrvTicket('${t.id}')">+ Adicionar Serviço</button>
           </div>
-          <div id="tabelaSrvWrap">${renderTabelaServicosTicket(t)}</div>
+          <div class="srv-table-wrap">
+            <div id="tabelaSrvWrap">${renderTabelaServicosTicket(t)}</div>
+          </div>
         </div>
 
         <div style="grid-column:1/-1;">
@@ -1328,10 +1527,10 @@ function verTicket(id){
         </div>
       </div>
 
-      <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
+      <div class="ticket-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-primary" onclick="atualizarTicket('${t.id}')">💾 Salvar Alterações</button>
         <button class="btn-purple"  onclick="abrirModalTransf('${t.id}')">🔀 Transferir Setor</button>
-        <button class="btn-danger"  onclick="excluirTicket('${t.id}')">🗑 Excluir Ticket</button>
+        ${isAdm ? `<button class="btn-danger" onclick="excluirTicket('${t.id}')">🗑 Excluir Ticket</button>` : ""}
         <button class="btn-dark"    onclick="mostrarTickets()">Cancelar</button>
       </div>
     </div>
@@ -1342,15 +1541,16 @@ function verTicket(id){
       <div id="historicoLista">${renderHistorico(t.historico||[])}</div>
       <div style="margin-top:14px;">
         <label style="font-weight:600;font-size:13px;">✏️ Registrar atualização manual:</label>
-        <div style="display:flex;gap:8px;margin-top:6px;">
+        <div style="display:flex;gap:8px;margin-top:6px;flex-wrap:wrap;">
           <textarea id="novaEvolucao" rows="2"
-            placeholder="Descreva o que aconteceu, próximos passos, etc. Será salvo com data e hora."
-            style="flex:1;padding:8px;border-radius:6px;border:1px solid #ccc;font-family:inherit;resize:vertical;"></textarea>
+            placeholder="Descreva o que aconteceu, próximos passos, etc."
+            style="flex:1;min-width:200px;padding:8px;border-radius:6px;border:1px solid #ccc;font-family:inherit;resize:vertical;"></textarea>
           <button class="btn-success" style="align-self:flex-end;" onclick="adicionarEvolucao('${t.id}')">Registrar</button>
         </div>
       </div>
     </div>`;
 }
+
 
 /* ============================================================
    TABELA DE SERVIÇOS COM CHECKBOXES
@@ -1364,9 +1564,9 @@ function renderTabelaServicosTicket(t){
     <table class="srv-table">
       <tr>
         <th>Serviço</th>
-        <th style="text-align:center;width:210px;">✅ Iniciado</th>
-        <th style="text-align:center;width:210px;">🏁 Finalizado</th>
-        <th style="width:80px;"></th>
+        <th style="text-align:center;width:180px;">✅ Iniciado</th>
+        <th style="text-align:center;width:180px;">🏁 Finalizado</th>
+        <th style="width:70px;"></th>
       </tr>
       ${srvs.map((s,i)=>`
         <tr>
@@ -1416,41 +1616,34 @@ function renderTabelaServicosTicket(t){
 
           <td>
             <button class="btn-danger" style="font-size:11px;padding:4px 8px;"
-              onclick="removerSrvTicket('${t.id}',${i})">Remover</button>
+              onclick="removerSrvTicket('${t.id}',${i})">✕</button>
           </td>
         </tr>`).join("")}
     </table>`;
 }
 
-/* Clique no checkbox INICIADO — se marcando, abre modal */
+/* Clique no checkbox INICIADO */
 function aoClicarIniciado(ticketId, srvIdx, marcado){
   if(marcado){
-    // Abrir modal para escolher responsável
     _pendIniciado = {ticketId, srvIdx};
     const t   = tickets.find(x=>x.id===ticketId);
     const srv = (t?.servicosTicket||[])[srvIdx];
-
     document.getElementById("modalIniciadoInfo").textContent =
       `Serviço: "${srv?.nome||""}" — Ticket #${ticketId}`;
-
-    // Preenche o select com todos os responsáveis (prioritariamente do Credenciamento)
     const todosResp = responsaveis.length
       ? responsaveis
       : usuarios.map(u=>({nome:u.nome,setor:""}));
     document.getElementById("modalIniciadoResp").innerHTML =
       '<option value="">-- Selecione o responsável --</option>' +
       todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
-
     document.getElementById("modalIniciadoObs").value = "";
     document.getElementById("modalIniciado").style.display = "flex";
   } else {
-    // Desmarcar: limpa dados de iniciado
     desmarcarIniciado(ticketId, srvIdx);
   }
 }
 
 function cancelarIniciado(){
-  // Desmarcar o checkbox visualmente sem salvar
   const {srvIdx} = _pendIniciado;
   const chk = document.getElementById("chk_ini_"+srvIdx);
   if(chk) chk.checked = false;
@@ -1461,38 +1654,20 @@ function cancelarIniciado(){
 function confirmarIniciado(){
   const {ticketId,srvIdx} = _pendIniciado;
   if(!ticketId && srvIdx===null){ fecharModal("modalIniciado"); return; }
-
   const respVal = document.getElementById("modalIniciadoResp").value.trim();
-  // Remove sufixo "(Setor)" se houver
   const responsavelNome = respVal.split(" (")[0];
-
-  if(!responsavelNome){
-    alert("Selecione o responsável.");
-    return;
-  }
-
+  if(!responsavelNome){ alert("Selecione o responsável."); return; }
   const obs = document.getElementById("modalIniciadoObs").value.trim();
-
   const idx = tickets.findIndex(t=>t.id===ticketId);
   if(idx<0){ fecharModal("modalIniciado"); return; }
-
   const srv = tickets[idx].servicosTicket[srvIdx];
-  srv.iniciado = {
-    marcado:      true,
-    usuario:      usuarioLogado.nome,
-    responsavel:  responsavelNome,
-    obs:          obs,
-    data:         agora()
-  };
-
+  srv.iniciado = { marcado:true, usuario:usuarioLogado.nome, responsavel:responsavelNome, obs, data:agora() };
   const acao = `Serviço "${srv.nome}" INICIADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}`;
   _logHistorico(idx, acao);
   tickets[idx].ultimaAtualizacao = agora();
   salvar();
-
   fecharModal("modalIniciado");
   _pendIniciado={ticketId:null,srvIdx:null};
-
   refreshTabelaSrv(idx);
   refreshHistorico(idx);
 }
@@ -1510,35 +1685,27 @@ function desmarcarIniciado(ticketId, srvIdx){
   refreshHistorico(idx);
 }
 
-/* Clique no checkbox FINALIZADO — se marcando, abre modal de responsável */
+/* Clique no checkbox FINALIZADO */
 function aoClicarFinalizado(ticketId, srvIdx, marcado){
   if(marcado){
     _pendFinalizado = {ticketId, srvIdx};
     const t   = tickets.find(x=>x.id===ticketId);
     const srv = (t?.servicosTicket||[])[srvIdx];
-
     document.getElementById("modalFinalizadoInfo").textContent =
       `Serviço: "${srv?.nome||""}" — Ticket #${ticketId}`;
-
-    // Verifica se este é o último serviço a ser finalizado (para alertar)
     const srvs = t?.servicosTicket||[];
     const outrosNaoFin = srvs.filter((_,i)=>i!==srvIdx&&!_.finalizado?.marcado);
     const aviso = document.getElementById("avisoUltimoServico");
-    if(aviso){
-      aviso.style.display = outrosNaoFin.length===0 ? "block" : "none";
-    }
-
+    if(aviso){ aviso.style.display = outrosNaoFin.length===0 ? "block" : "none"; }
     const todosResp = responsaveis.length
       ? responsaveis
       : usuarios.map(u=>({nome:u.nome,setor:""}));
     document.getElementById("modalFinalizadoResp").innerHTML =
       '<option value="">-- Selecione o responsável --</option>' +
       todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
-
     document.getElementById("modalFinalizadoObs").value="";
     document.getElementById("modalFinalizado").style.display="flex";
   } else {
-    // Desmarcar: abre modal pedindo responsável e motivo
     _pendDesmarcarFin = {ticketId, srvIdx};
     const t2  = tickets.find(x=>x.id===ticketId);
     const srv2 = (t2?.servicosTicket||[])[srvIdx];
@@ -1556,7 +1723,6 @@ function aoClicarFinalizado(ticketId, srvIdx, marcado){
 }
 
 function cancelarDesmarcarFin(){
-  // Recolocar o checkbox como marcado (o usuário cancelou)
   const {srvIdx} = _pendDesmarcarFin;
   const chk = document.getElementById("chk_fin_"+srvIdx);
   if(chk) chk.checked = true;
@@ -1567,40 +1733,30 @@ function cancelarDesmarcarFin(){
 function confirmarDesmarcarFin(){
   const {ticketId, srvIdx} = _pendDesmarcarFin;
   if(!ticketId && srvIdx===null){ fecharModal("modalDesmarcarFin"); return; }
-
   const respVal = document.getElementById("modalDesmarcarFinResp").value.trim();
   const responsavelNome = respVal.split(" (")[0];
   if(!responsavelNome){ alert("Selecione o responsável."); return; }
-
   const obs = document.getElementById("modalDesmarcarFinObs").value.trim();
   const idx  = tickets.findIndex(t=>t.id===ticketId);
   if(idx<0){ fecharModal("modalDesmarcarFin"); return; }
-
   const srv  = tickets[idx].servicosTicket[srvIdx];
   const agr  = agora();
-
-  // Se o ticket estava Concluído, reabre
   const estavaConcluido = tickets[idx].status==="Concluído";
   if(estavaConcluido){
     tickets[idx].status       = "Em andamento";
     tickets[idx].dataConclusao = null;
-    _logHistorico(idx, `Ticket reaberto — serviço "${srv.nome}" desmarcado como finalizado por ${responsavelNome}`);
+    _logHistorico(idx, `Ticket reaberto — serviço "${srv.nome}" desmarcado por ${responsavelNome}`);
   }
-
-  // Limpa os dados de finalizado e registra quem desmarcou
   const nomeAnterior = srv.finalizado?.responsavel || srv.finalizado?.usuario || "";
   srv.finalizado = { marcado:false, usuario:"", responsavel:"", obs:"", data:"" };
-
-  const acao = `Serviço "${srv.nome}" DESMARCADO como finalizado — por: ${responsavelNome}${obs?` — Motivo: "${obs}"`:""}${nomeAnterior?` (finalizador anterior: ${nomeAnterior})`:""}`;
+  const acao = `Serviço "${srv.nome}" DESMARCADO — por: ${responsavelNome}${obs?` — Motivo: "${obs}"`:""}${nomeAnterior?` (anterior: ${nomeAnterior})`:""}`;
   _logHistorico(idx, acao);
   tickets[idx].ultimaAtualizacao = agr;
-
   salvar();
   fecharModal("modalDesmarcarFin");
   _pendDesmarcarFin={ticketId:null,srvIdx:null};
   refreshTabelaSrv(idx);
   refreshHistorico(idx);
-
   if(estavaConcluido) verTicket(ticketId);
 }
 
@@ -1615,60 +1771,33 @@ function cancelarFinalizado(){
 function confirmarFinalizado(){
   const {ticketId, srvIdx} = _pendFinalizado;
   if(!ticketId && srvIdx===null){ fecharModal("modalFinalizado"); return; }
-
   const respVal = document.getElementById("modalFinalizadoResp").value.trim();
   const responsavelNome = respVal.split(" (")[0];
-
-  if(!responsavelNome){
-    alert("Selecione o responsável.");
-    return;
-  }
-
+  if(!responsavelNome){ alert("Selecione o responsável."); return; }
   const obs = document.getElementById("modalFinalizadoObs").value.trim();
   const idx  = tickets.findIndex(t=>t.id===ticketId);
   if(idx<0){ fecharModal("modalFinalizado"); return; }
-
   const srv = tickets[idx].servicosTicket[srvIdx];
   const agr = agora();
-
-  srv.finalizado = {
-    marcado:     true,
-    usuario:     usuarioLogado.nome,
-    responsavel: responsavelNome,
-    obs:         obs,
-    data:        agr
-  };
-
+  srv.finalizado = { marcado:true, usuario:usuarioLogado.nome, responsavel:responsavelNome, obs, data:agr };
   const acao = `Serviço "${srv.nome}" FINALIZADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}`;
   _logHistorico(idx, acao);
   tickets[idx].ultimaAtualizacao = agr;
-
-  // ─── REGRA: se TODOS os serviços estão finalizados → ticket CONCLUÍDO ───
   const srvs = tickets[idx].servicosTicket||[];
   const todosFinalizados = srvs.length>0 && srvs.every(s=>s.finalizado?.marcado);
   if(todosFinalizados && tickets[idx].status!=="Concluído"){
     const statusAntigo = tickets[idx].status;
     tickets[idx].status = "Concluído";
     tickets[idx].dataConclusao = agr;
-    _logHistorico(idx,
-      `✅ Ticket CONCLUÍDO automaticamente — todos os ${srvs.length} serviço(s) foram finalizados (status anterior: "${statusAntigo}")`
-    );
+    _logHistorico(idx, `✅ Ticket CONCLUÍDO automaticamente — todos os ${srvs.length} serviço(s) finalizados (anterior: "${statusAntigo}")`);
   }
-
   salvar();
   fecharModal("modalFinalizado");
   _pendFinalizado={ticketId:null,srvIdx:null};
   refreshTabelaSrv(idx);
   refreshHistorico(idx);
-
-  // Atualiza badge de status no cabeçalho da tela sem recarregar tudo
-  if(todosFinalizados){
-    // Recarrega a tela do ticket para refletir o novo status CONCLUÍDO
-    verTicket(ticketId);
-  }
+  if(todosFinalizados) verTicket(ticketId);
 }
-
-// desmarcarFinalizado agora tratado via modal confirmarDesmarcarFin()
 
 /* Adiciona serviço ao ticket já salvo */
 function adicionarSrvTicket(id){
@@ -1702,6 +1831,7 @@ function removerSrvTicket(id,i){
   refreshHistorico(idx);
 }
 
+
 /* ============================================================
    MODAL ATUALIZAÇÃO 48H
    ============================================================ */
@@ -1721,7 +1851,6 @@ function confirmarAtualizacao(){
   const {ticketId}=_pendAtualizacao;
   const idx=tickets.findIndex(t=>t.id===ticketId);
   if(idx<0){fecharModal("modalAtualizacao");return;}
-  // Log especial de atualização obrigatória
   if(!tickets[idx].historico) tickets[idx].historico=[];
   tickets[idx].historico.push({
     acao: texto,
@@ -1736,6 +1865,64 @@ function confirmarAtualizacao(){
   verTicket(ticketId);
 }
 
+
+/* ============================================================
+   MODAL AGUARDANDO CLIENTE
+   ============================================================ */
+function abrirModalAguardandoCliente(id){
+  const t=tickets.find(x=>x.id===id);
+  document.getElementById("modalAguardandoClienteInfo").textContent =
+    `Ticket #${id} — "${t?.titulo||""}" | Cliente: ${t?.cliente||"?"}`;
+  const todosResp = responsaveis.length
+    ? responsaveis
+    : usuarios.map(u=>({nome:u.nome,setor:""}));
+  document.getElementById("modalAguardandoClienteResp").innerHTML =
+    '<option value="">-- Selecione o responsável --</option>' +
+    todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+  document.getElementById("modalAguardandoClienteTexto").value="";
+  document.getElementById("contadorAguardandoCliente").textContent="0";
+  const textarea = document.getElementById("modalAguardandoClienteTexto");
+  textarea.oninput = function(){
+    document.getElementById("contadorAguardandoCliente").textContent = this.value.length;
+  };
+  document.getElementById("modalAguardandoCliente").style.display="flex";
+}
+
+function cancelarAguardandoCliente(){
+  fecharModal("modalAguardandoCliente");
+  _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+}
+
+function confirmarAguardandoCliente(){
+  const {ticketId, statusAnterior} = _pendAguardandoCliente;
+  if(!ticketId){ fecharModal("modalAguardandoCliente"); return; }
+  const respVal = document.getElementById("modalAguardandoClienteResp").value.trim();
+  const responsavelNome = respVal.split(" (")[0];
+  if(!responsavelNome){ alert("Selecione o responsável."); return; }
+  const texto = document.getElementById("modalAguardandoClienteTexto").value.trim();
+  if(!texto){ alert("Informe o que o cliente precisa fazer."); return; }
+  const idx=tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalAguardandoCliente"); return; }
+  const agr = agora();
+  tickets[idx].titulo     =document.getElementById("vt_titulo")?.value.trim()||tickets[idx].titulo;
+  tickets[idx].cliente    =document.getElementById("vt_cliente")?.value.trim()||tickets[idx].cliente;
+  tickets[idx].responsavel=document.getElementById("vt_responsavel")?.value||tickets[idx].responsavel;
+  tickets[idx].prioridade =document.getElementById("vt_prioridade")?.value||tickets[idx].prioridade;
+  tickets[idx].descricao  =document.getElementById("vt_descricao")?.value.trim()||tickets[idx].descricao;
+  tickets[idx].obs        =document.getElementById("vt_obs")?.value.trim()||tickets[idx].obs;
+  tickets[idx].status = "Aguardando cliente";
+  tickets[idx].pendenciaCliente     = texto;
+  tickets[idx].pendenciaClienteResp = responsavelNome;
+  tickets[idx].pendenciaClienteData = agr;
+  _logHistorico(idx, `Status: "${statusAnterior||"?"}" → "Aguardando cliente" — Responsável: ${responsavelNome} — Pendência: "${texto}"`);
+  tickets[idx].ultimaAtualizacao = agr;
+  salvar();
+  fecharModal("modalAguardandoCliente");
+  _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+  verTicket(ticketId);
+}
+
+
 /* ============================================================
    REFRESH PARCIAL DA TELA
    ============================================================ */
@@ -1743,17 +1930,15 @@ function refreshTabelaSrv(idx){
   const wrap=document.getElementById("tabelaSrvWrap");
   if(wrap) wrap.innerHTML=renderTabelaServicosTicket(tickets[idx]);
 }
-
 function refreshHistorico(idx){
   const el=document.getElementById("historicoLista");
   if(el) el.innerHTML=renderHistorico(tickets[idx].historico||[]);
 }
-
 function renderHistorico(hist){
   if(!hist.length) return '<p style="color:#aaa;font-size:12px;">Nenhum registro ainda.</p>';
   return hist.slice().reverse().map(h=>{
     const isAtualiz = h.tipo==="atualizacao48h";
-    const isPendCliente = (h.acao||"").includes("Pendência do Cliente");
+    const isPendCliente = (h.acao||"").includes("Pendência");
     return `
       <div class="hist-row${isAtualiz?" atualiz":""}" ${isPendCliente?'style="background:#fce4ec;border-left:3px solid #e91e8c;padding-left:8px;"':""}>
         <b>${escHtml(h.usuario)}</b>
@@ -1765,12 +1950,14 @@ function renderHistorico(hist){
   }).join("");
 }
 
+
 /* ============================================================
    MODAL GERAL
    ============================================================ */
 function fecharModal(id){
   document.getElementById(id).style.display="none";
 }
+
 
 /* ============================================================
    TRANSFERÊNCIA DE SETOR
@@ -1806,6 +1993,7 @@ function confirmarTransferencia(){
   verTicket(tid);
 }
 
+
 /* ============================================================
    EDITAR / EXCLUIR / HISTÓRICO
    ============================================================ */
@@ -1815,14 +2003,12 @@ async function atualizarTicket(id){
   const statusAntigo=tickets[idx].status;
   const novoStatus  =document.getElementById("vt_status").value;
 
-  // Se mudando para "Aguardando cliente", abre modal antes de salvar
   if(novoStatus==="Aguardando cliente" && statusAntigo!=="Aguardando cliente"){
     _pendAguardandoCliente = { ticketId:id, statusAnterior:statusAntigo };
     abrirModalAguardandoCliente(id);
     return;
   }
 
-  // Se saindo de "Aguardando cliente", limpa pendência
   if(statusAntigo==="Aguardando cliente" && novoStatus!=="Aguardando cliente"){
     tickets[idx].pendenciaCliente     = "";
     tickets[idx].pendenciaClienteResp = "";
@@ -1847,22 +2033,18 @@ async function atualizarTicket(id){
 }
 
 async function excluirTicket(id){
+  // Apenas ADM pode excluir
+  if(usuarioLogado.perfil !== "adm"){
+    alert("Acesso restrito. Apenas administradores podem excluir tickets.");
+    return;
+  }
   const idx = tickets.findIndex(x=>x.id===id);
   if(idx<0)return;
   const t = tickets[idx];
   if(!confirm(`Excluir o ticket "${t.titulo}"? Ação irreversível.`))return;
-
-  // Se já existe no Firestore, exclui o documento
-  if(t._id){
-    await excluirTicketFirebase(t._id);
-  }
-
-  // Remove da memória e atualiza UI
+  if(t._id) await excluirTicketFirebase(t._id);
   tickets.splice(idx,1);
   mostrarTickets();
-
-  // Mantém compatibilidade: garante que o estado fique sincronizado
-  // (caso existam tickets locais ainda sem _id)
   salvar();
 }
 
@@ -1877,85 +2059,6 @@ async function adicionarEvolucao(id){
   verTicket(id);
 }
 
-/* ============================================================
-   MODAL AGUARDANDO CLIENTE / PENDÊNCIA DO CLIENTE
-   ============================================================ */
-function abrirModalAguardandoCliente(id){
-  const t=tickets.find(x=>x.id===id);
-  document.getElementById("modalAguardandoClienteInfo").textContent =
-    `Ticket #${id} — "${t?.titulo||""}" | Cliente: ${t?.cliente||"?"}`;
-
-  const todosResp = responsaveis.length
-    ? responsaveis
-    : usuarios.map(u=>({nome:u.nome,setor:""}));
-  document.getElementById("modalAguardandoClienteResp").innerHTML =
-    '<option value="">-- Selecione o responsável --</option>' +
-    todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
-
-  document.getElementById("modalAguardandoClienteTexto").value="";
-  document.getElementById("contadorAguardandoCliente").textContent="0";
-
-  // Adiciona listener de contagem de caracteres
-  const textarea = document.getElementById("modalAguardandoClienteTexto");
-  textarea.oninput = function(){
-    document.getElementById("contadorAguardandoCliente").textContent = this.value.length;
-  };
-
-  document.getElementById("modalAguardandoCliente").style.display="flex";
-}
-
-function cancelarAguardandoCliente(){
-  fecharModal("modalAguardandoCliente");
-  _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
-}
-
-function confirmarAguardandoCliente(){
-  const {ticketId, statusAnterior} = _pendAguardandoCliente;
-  if(!ticketId){ fecharModal("modalAguardandoCliente"); return; }
-
-  const respVal = document.getElementById("modalAguardandoClienteResp").value.trim();
-  const responsavelNome = respVal.split(" (")[0];
-  if(!responsavelNome){
-    alert("Selecione o responsável.");
-    return;
-  }
-
-  const texto = document.getElementById("modalAguardandoClienteTexto").value.trim();
-  if(!texto){
-    alert("Informe o que o cliente precisa fazer.");
-    return;
-  }
-
-  const idx=tickets.findIndex(t=>t.id===ticketId);
-  if(idx<0){ fecharModal("modalAguardandoCliente"); return; }
-
-  const agr = agora();
-
-  // Salva também os outros campos que poderiam ter sido editados
-  tickets[idx].titulo     =document.getElementById("vt_titulo")?.value.trim()||tickets[idx].titulo;
-  tickets[idx].cliente    =document.getElementById("vt_cliente")?.value.trim()||tickets[idx].cliente;
-  tickets[idx].responsavel=document.getElementById("vt_responsavel")?.value||tickets[idx].responsavel;
-  tickets[idx].prioridade =document.getElementById("vt_prioridade")?.value||tickets[idx].prioridade;
-  tickets[idx].descricao  =document.getElementById("vt_descricao")?.value.trim()||tickets[idx].descricao;
-  tickets[idx].obs        =document.getElementById("vt_obs")?.value.trim()||tickets[idx].obs;
-
-  // Muda o status
-  tickets[idx].status = "Aguardando cliente";
-
-  // Grava dados da pendência
-  tickets[idx].pendenciaCliente     = texto;
-  tickets[idx].pendenciaClienteResp = responsavelNome;
-  tickets[idx].pendenciaClienteData = agr;
-
-  // Log no histórico
-  _logHistorico(idx, `Status: "${statusAnterior||"?"}" → "Aguardando cliente" — Responsável: ${responsavelNome} — Pendência do Cliente: "${texto}"`);
-  tickets[idx].ultimaAtualizacao = agr;
-
-  salvar();
-  fecharModal("modalAguardandoCliente");
-  _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
-  verTicket(ticketId);
-}
 
 /* ============================================================
    UTILITÁRIOS
@@ -1964,15 +2067,12 @@ function _logHistorico(idx,acao,tipo="sistema"){
   if(!tickets[idx].historico) tickets[idx].historico=[];
   tickets[idx].historico.push({acao,usuario:usuarioLogado.nome,data:agora(),tipo});
 }
-
 function gerarId(){ return Date.now().toString(36).toUpperCase(); }
 function agora(){   return new Date().toISOString(); }
-
 function formatarData(iso){
   if(!iso)return "-";
   return new Date(iso).toLocaleString("pt-BR");
 }
-
 function calcularSLARestante(ticket){
   const srvs=ticket.servicosTicket||[];
   let slaHoras=0;
@@ -1987,7 +2087,6 @@ function calcularSLARestante(ticket){
   const restante  =slaHoras-decorrido;
   return{horas:restante,atrasado:restante<0,porcentagem:Math.min(100,Math.round((decorrido/slaHoras)*100))};
 }
-
 function corStatus(s){
   return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","Concluído":"#1cc88a","Cancelado":"#858796"}[s]||"#4e73df";
 }
@@ -1998,10 +2097,10 @@ function escHtml(str){
   return String(str).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
 }
 
+
 /* ============================================================
    INIT
    ============================================================ */
-// Inicia carregando dados do Firebase e depois mostra o login
 carregarDadosFirebase().then(() => {
   carregarLogin();
 }).catch(err => {
