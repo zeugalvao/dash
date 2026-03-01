@@ -1,0 +1,2016 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+<meta charset="UTF-8">
+<title>CRM Profissional</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+*{box-sizing:border-box;}
+body{margin:0;font-family:Segoe UI,sans-serif;background:#eef2f7;display:flex;height:100vh;}
+
+/* SIDEBAR */
+.sidebar{width:270px;background:#1f2937;color:white;padding:20px;display:flex;flex-direction:column;flex-shrink:0;}
+.sidebar button,.sidebar select{margin-bottom:10px;width:100%;}
+
+/* MAIN */
+.main{flex:1;padding:20px;overflow:auto;}
+
+/* INPUTS GLOBAIS */
+input,select,textarea{width:100%;padding:7px 9px;margin:3px 0;border-radius:6px;border:1px solid #ccc;font-family:inherit;font-size:13px;}
+input[type=checkbox]{width:17px;height:17px;margin:0;cursor:pointer;accent-color:#4e73df;}
+
+/* BOTÕES */
+button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white;font-size:12px;margin-right:4px;white-space:nowrap;}
+.btn-primary {background:#4e73df;}
+.btn-success {background:#1cc88a;}
+.btn-danger  {background:#e74a3b;}
+.btn-warning {background:#f6c23e;color:#000;}
+.btn-dark    {background:#343a40;}
+.btn-info    {background:#36b9cc;}
+.btn-purple  {background:#6f42c1;}
+.btn-orange  {background:#fd7e14;}
+.btn-pink    {background:#e91e8c;}
+
+/* CARDS */
+.card{background:white;padding:16px;border-radius:10px;margin-bottom:15px;box-shadow:0 3px 8px rgba(0,0,0,0.06);border-left:6px solid #1cc88a;}
+.card.evolucao{border-left-color:#4e73df;background:#e8f0ff;}
+
+/* LOGIN */
+.login-container{width:100%;display:flex;justify-content:center;align-items:center;height:100vh;}
+.login-box{background:white;padding:30px;border-radius:10px;box-shadow:0 3px 10px rgba(0,0,0,0.1);width:320px;}
+
+/* TABS */
+.tabs{margin-bottom:15px;display:flex;flex-wrap:wrap;gap:6px;}
+
+/* SERVIÇO CADASTRO */
+.servico-item{display:grid;grid-template-columns:1fr 100px auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #eee;}
+
+/* TABELA DE SERVIÇOS NO TICKET */
+.srv-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
+.srv-table th{background:#f0f4ff;padding:8px 10px;text-align:left;font-weight:600;border-bottom:2px solid #d0d9f0;}
+.srv-table td{padding:8px 10px;border-bottom:1px solid #eee;vertical-align:middle;}
+.srv-table tr:hover td{background:#fafbff;}
+.chk-cell{display:flex;flex-direction:column;align-items:center;gap:3px;}
+.chk-row{display:flex;align-items:center;gap:6px;}
+.chk-info{font-size:10px;color:#888;text-align:center;line-height:1.4;}
+.chk-ok{color:#1cc88a;font-weight:700;font-size:12px;}
+.chk-resp{font-size:10px;color:#4e73df;font-weight:600;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.48);display:flex;align-items:center;justify-content:center;z-index:999;}
+.modal-box{background:white;border-radius:10px;padding:26px;min-width:360px;max-width:480px;box-shadow:0 8px 30px rgba(0,0,0,0.25);}
+.modal-box h3{margin-top:0;margin-bottom:12px;}
+
+/* TICKET CARD */
+.ticket-card{border:1px solid #e3e6f0;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s;}
+.ticket-card:hover{box-shadow:0 2px 12px rgba(0,0,0,0.12);}
+
+/* ALERTA 48H */
+.alerta-48h{
+  display:inline-flex;align-items:center;gap:5px;
+  background:#fff3cd;border:1px solid #f6c23e;color:#856404;
+  padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;
+  animation:pulse48 2s infinite;
+}
+@keyframes pulse48{0%,100%{opacity:1;}50%{opacity:.6;}}
+
+/* RESUMO */
+.resumo-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+.resumo-card{color:white;border-radius:10px;padding:14px;text-align:center;}
+.resumo-num{font-size:28px;font-weight:bold;}
+.resumo-label{font-size:12px;opacity:.9;}
+
+/* BADGE */
+.badge{display:inline-block;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;}
+
+/* HISTÓRICO */
+.hist-row{border-bottom:1px solid #d0d9f0;padding:9px 0;font-size:13px;overflow:hidden;}
+.hist-row.atualiz{background:#fffbea;border-left:3px solid #f6c23e;padding-left:8px;}
+</style>
+</head>
+<body>
+
+<!-- ============================================================
+     LOGIN
+     ============================================================ -->
+<div id="loginScreen" class="login-container">
+  <div class="login-box">
+    <h2 style="margin-top:0;">🔐 Login CRM</h2>
+    <label>Selecione o usuário:</label>
+    <select id="loginUser"></select>
+    <button class="btn-primary" style="margin-top:12px;width:100%;padding:9px;" onclick="login()">Entrar</button>
+  </div>
+</div>
+
+<!-- ============================================================
+     APP
+     ============================================================ -->
+<div id="crmApp" style="display:none;width:100%;">
+  <div class="sidebar">
+    <h2 style="margin-top:0;">CRM</h2>
+    <button class="btn-primary" onclick="mostrarTickets()">🎫 Tickets</button>
+    <button class="btn-success" onclick="mostrarCadastros()">📋 CADASTROS</button>
+    <label style="font-size:12px;opacity:.7;margin-top:4px;">Visão:</label>
+    <select id="filtroVisao" onchange="mostrarTickets()"></select>
+    <hr style="border-color:#374151;margin:12px 0;">
+    <div id="usuarioInfo" style="font-size:13px;"></div>
+    <div id="perfilInfo"  style="font-size:13px;margin-bottom:12px;"></div>
+    <button class="btn-primary" onclick="novoTicket()">+ Novo Ticket</button>
+    <button class="btn-dark"    onclick="logout()" style="margin-top:auto;">Sair</button>
+  </div>
+  <div class="main">
+    <div id="conteudo"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: TRANSFERÊNCIA DE SETOR
+     ============================================================ -->
+<div id="modalTransf" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>🔀 Transferir Ticket</h3>
+    <p id="modalTransfInfo" style="font-size:13px;color:#555;margin-bottom:14px;"></p>
+    <label><b>Setor de destino:</b></label>
+    <select id="modalSetorDestino" style="margin:6px 0 16px;"></select>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-primary" onclick="confirmarTransferencia()">Confirmar Transferência</button>
+      <button class="btn-dark"    onclick="fecharModal('modalTransf')">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: RESPONSÁVEL AO MARCAR INICIADO
+     ============================================================ -->
+<div id="modalIniciado" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>✅ Marcar como Iniciado</h3>
+    <p id="modalIniciadoInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <label style="margin-top:8px;display:block;"><b>Responsável do Credenciamento:</b></label>
+    <select id="modalIniciadoResp" style="margin:6px 0 8px;"></select>
+    <label style="margin-top:4px;display:block;font-size:12px;color:#666;">Observação (opcional):</label>
+    <textarea id="modalIniciadoObs" rows="2"
+      style="margin:4px 0 16px;resize:vertical;"
+      placeholder="Ex: Documentação em análise..."></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-success" onclick="confirmarIniciado()">✔ Confirmar Início</button>
+      <button class="btn-dark"    onclick="cancelarIniciado()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: RESPONSÁVEL AO FINALIZAR SERVIÇO
+     ============================================================ -->
+<div id="modalFinalizado" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>🏁 Finalizar Serviço</h3>
+    <p id="modalFinalizadoInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <div id="avisoUltimoServico" style="background:#d4edda;border:1px solid #1cc88a;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#155724;display:none;">
+      ✅ <b>Este é o último serviço!</b> Ao confirmar, o ticket será automaticamente marcado como <b>Concluído</b>.
+    </div>
+    <div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#4e73df;">
+      📝 O responsável e a data/hora serão gravados no histórico.
+    </div>
+    <label style="margin-top:6px;display:block;"><b>Responsável pelo encerramento:</b></label>
+    <select id="modalFinalizadoResp" style="margin:6px 0 8px;"></select>
+    <label style="margin-top:4px;display:block;font-size:12px;color:#666;">Observação (opcional):</label>
+    <textarea id="modalFinalizadoObs" rows="2"
+      style="margin:4px 0 16px;resize:vertical;"
+      placeholder="Ex: Credenciamento concluído com sucesso..."></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-success" onclick="confirmarFinalizado()">🏁 Confirmar Finalização</button>
+      <button class="btn-dark"    onclick="cancelarFinalizado()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: MOTIVO DESMARCAR FINALIZADO
+     ============================================================ -->
+<div id="modalDesmarcarFin" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>↩️ Desmarcar Finalização</h3>
+    <p id="modalDesmarcarFinInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#856404;">
+      ⚠️ Se o ticket estava <b>Concluído</b>, ele voltará para <b>Em andamento</b>.
+    </div>
+    <label style="display:block;margin-top:6px;"><b>Responsável pela reversão:</b></label>
+    <select id="modalDesmarcarFinResp" style="margin:6px 0 8px;"></select>
+    <label style="display:block;font-size:12px;color:#666;">Motivo / Observação:</label>
+    <textarea id="modalDesmarcarFinObs" rows="2"
+      style="margin:4px 0 16px;resize:vertical;"
+      placeholder="Ex: Pendência identificada, reprocessamento necessário..."></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-warning" style="color:#000;" onclick="confirmarDesmarcarFin()">↩️ Confirmar Reversão</button>
+      <button class="btn-dark" onclick="cancelarDesmarcarFin()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: ATUALIZAÇÃO DE 48H
+     ============================================================ -->
+<div id="modalAtualizacao" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>🕐 Atualização Necessária</h3>
+    <p id="modalAtualizacaoInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <label style="display:block;margin-top:8px;"><b>Informe a atualização do serviço:</b></label>
+    <textarea id="modalAtualizacaoTexto" rows="3"
+      style="margin:6px 0 16px;resize:vertical;"
+      placeholder="Descreva o que está acontecendo com o credenciamento..."></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-warning" style="color:#000;" onclick="confirmarAtualizacao()">📝 Registrar Atualização</button>
+      <button class="btn-dark"    onclick="fecharModal('modalAtualizacao')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: AGUARDANDO CLIENTE / PENDÊNCIA DO CLIENTE
+     ============================================================ -->
+<div id="modalAguardandoCliente" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:520px;">
+    <h3>⏳ Aguardando Cliente — Pendência</h3>
+    <p id="modalAguardandoClienteInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <div style="background:#fce4ec;border:1px solid #e91e8c;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#880e4f;">
+      📝 O ticket será marcado como <b>"Aguardando cliente"</b> e classificado como <b>Pendência do Cliente</b>. O responsável, data/hora e a descrição serão gravados no histórico.
+    </div>
+    <label style="margin-top:6px;display:block;"><b>Responsável pelo registro:</b></label>
+    <select id="modalAguardandoClienteResp" style="margin:6px 0 8px;"></select>
+    <label style="display:block;font-size:12px;color:#666;margin-top:4px;"><b>O que o cliente precisa fazer? *</b></label>
+    <textarea id="modalAguardandoClienteTexto" rows="5" maxlength="500"
+      style="margin:4px 0 4px;resize:vertical;"
+      placeholder="Descreva detalhadamente o que o cliente precisa providenciar ou resolver (máx. 500 caracteres)..."></textarea>
+    <div style="text-align:right;font-size:11px;color:#888;margin-bottom:12px;">
+      <span id="contadorAguardandoCliente">0</span>/500 caracteres
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-pink" onclick="confirmarAguardandoCliente()">✔ Confirmar Pendência</button>
+      <button class="btn-dark" onclick="cancelarAguardandoCliente()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+<script>
+
+/* ============================================================
+   FIREBASE — CONFIGURAÇÃO
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyDvY4F0fNH0d59t1ZRZqRsbzHaEaxh2RaA",
+  authDomain: "crm-elosgate.firebaseapp.com",
+  projectId: "crm-elosgate",
+  storageBucket: "crm-elosgate.appspot.com",
+  messagingSenderId: "198667496213",
+  appId: "1:198667496213:web:679aa4e323edd8ba30571c"
+};
+
+// Inicializa o Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+window.db = db; // expõe para funções que verificam window.db
+
+
+/* ============================================================
+   DADOS
+   ============================================================ */
+/* ============================================================
+   DADOS — Agora vem do Firebase
+   ============================================================ */
+let usuarios         = [];
+let setores          = [];
+let responsaveis     = [];
+let servicosCadastro = [];
+let tickets          = [];
+let _dadosCarregados = false;
+
+// Carrega todos os dados do Firebase
+async function carregarDadosFirebase() {
+  try {
+    // 1) Configurações (setores)
+    const configDoc = await db.collection("configuracoes").doc("geral").get();
+    if (configDoc.exists) {
+      setores = configDoc.data().setores || ["Comercial","Credenciamento","Suporte"];
+    } else {
+      setores = ["Comercial","Credenciamento","Suporte"];
+      // Cria o documento se não existir
+      await db.collection("configuracoes").doc("geral").set({ setores });
+    }
+
+    // 2) Usuários
+    const usrSnap = await db.collection("usuarios").get();
+    usuarios = usrSnap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    if (!usuarios.length) {
+      // Cria usuário padrão
+      const ref = await db.collection("usuarios").add({ nome: "Elizeu", perfil: "adm" });
+      usuarios = [{ _id: ref.id, nome: "Elizeu", perfil: "adm" }];
+    }
+
+    // 3) Responsáveis
+    const respSnap = await db.collection("responsaveis").get();
+    responsaveis = respSnap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+
+    // 4) Serviços
+    const srvSnap = await db.collection("servicos").get();
+    servicosCadastro = srvSnap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+
+    // 5) Tickets
+    const tktSnap = await db.collection("tickets").get();
+    tickets = tktSnap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+
+    _dadosCarregados = true;
+    console.log("✅ Dados carregados do Firebase!");
+    console.log(`   ${usuarios.length} usuários, ${tickets.length} tickets`);
+  } catch (err) {
+    console.error("❌ Erro ao carregar Firebase:", err);
+    alert("Erro ao conectar com o banco de dados. Verifique o console (F12).");
+  }
+}
+
+
+
+
+/* ============================================================
+   PERSISTÊNCIA
+   ============================================================ */
+/* ============================================================
+   PERSISTÊNCIA — Salva no Firebase
+   ============================================================ */
+
+// Salva setores
+async function salvarSetores() {
+  try {
+    await db.collection("configuracoes").doc("geral").set({ setores });
+  } catch (err) { console.error("Erro ao salvar setores:", err); }
+}
+
+// Salva um usuário específico (criar ou atualizar)
+async function salvarUsuario(usuario) {
+  try {
+    if (usuario._id) {
+      const { _id, ...dados } = usuario;
+      await db.collection("usuarios").doc(_id).set(dados);
+    } else {
+      const ref = await db.collection("usuarios").add({ nome: usuario.nome, perfil: usuario.perfil });
+      usuario._id = ref.id;
+    }
+  } catch (err) { console.error("Erro ao salvar usuário:", err); }
+}
+
+async function excluirUsuarioFirebase(id) {
+  try { await db.collection("usuarios").doc(id).delete(); }
+  catch (err) { console.error("Erro ao excluir usuário:", err); }
+}
+
+// Salva um responsável (criar ou atualizar)
+async function salvarResponsavel(resp) {
+  try {
+    if (resp._id) {
+      const { _id, ...dados } = resp;
+      await db.collection("responsaveis").doc(_id).set(dados);
+    } else {
+      const ref = await db.collection("responsaveis").add({ nome: resp.nome, setor: resp.setor });
+      resp._id = ref.id;
+    }
+  } catch (err) { console.error("Erro ao salvar responsável:", err); }
+}
+
+async function excluirResponsavelFirebase(id) {
+  try { await db.collection("responsaveis").doc(id).delete(); }
+  catch (err) { console.error("Erro ao excluir responsável:", err); }
+}
+
+// Salva um serviço (criar ou atualizar)
+async function salvarServicoCad(srv) {
+  try {
+    if (srv._id) {
+      const { _id, ...dados } = srv;
+      await db.collection("servicos").doc(_id).set(dados);
+    } else {
+      const ref = await db.collection("servicos").add({ nome: srv.nome, sla: srv.sla });
+      srv._id = ref.id;
+    }
+  } catch (err) { console.error("Erro ao salvar serviço:", err); }
+}
+
+async function excluirServicoFirebase(id) {
+  try { await db.collection("servicos").doc(id).delete(); }
+  catch (err) { console.error("Erro ao excluir serviço:", err); }
+}
+
+// Salva um ticket (criar ou atualizar)
+async function salvarTicket(ticket) {
+  try {
+    if (ticket._id) {
+      const { _id, ...dados } = ticket;
+      await db.collection("tickets").doc(_id).set(dados);
+    } else {
+      const ref = await db.collection("tickets").add(
+        Object.fromEntries(Object.entries(ticket).filter(([k]) => k !== '_id'))
+      );
+      ticket._id = ref.id;
+    }
+  } catch (err) { console.error("Erro ao salvar ticket:", err); }
+}
+
+async function excluirTicketFirebase(id) {
+  try { await db.collection("tickets").doc(id).delete(); }
+  catch (err) { console.error("Erro ao excluir ticket:", err); }
+}
+
+// Função de compatibilidade — substitui a antiga salvar()
+// Salva TUDO de uma vez (usada como fallback)
+async function salvar() {
+  // Camada de compatibilidade: o CRM original chamava salvar() para persistir tudo.
+  // Aqui a gente sincroniza os arrays em memória com o Firestore.
+  // Observação: isso funciona sem login (regras em modo de teste / allow read, write: if true).
+
+  if (!(window.db || (typeof db !== 'undefined' && db))) {
+    window.db = (typeof db !== 'undefined' ? db : undefined);
+    
+    console.warn("Firebase/Firestore não inicializado — salvar() ignorado.");
+    return;
+  }
+
+  async function _syncCollection(colName, arr) {
+    const colRef = db.collection(colName);
+
+    // 1) Lê IDs existentes
+    const snap = await colRef.get();
+    const existentes = new Set(snap.docs.map(d => d.id));
+
+    // 2) Monta mapa de IDs que devem existir após a sincronização
+    const desejados = new Set(arr.filter(x => x && x._id).map(x => x._id));
+
+    // 3) Deleta no Firestore o que não existe mais localmente
+    const paraDeletar = [...existentes].filter(id => !desejados.has(id));
+
+    // Batch (limite 500 operações)
+    async function _commitEmLotes(ops) {
+      const LIMITE = 450; // margem
+      for (let i = 0; i < ops.length; i += LIMITE) {
+        const batch = db.batch();
+        ops.slice(i, i + LIMITE).forEach(fn => fn(batch));
+        await batch.commit();
+      }
+    }
+
+    const delOps = paraDeletar.map(id => (batch) => batch.delete(colRef.doc(id)));
+    await _commitEmLotes(delOps);
+
+    // 4) Upsert dos itens com _id
+    const upsertOps = arr
+      .filter(x => x && x._id)
+      .map(item => (batch) => {
+        const { _id, ...dados } = item;
+        batch.set(colRef.doc(_id), dados, { merge: true });
+      });
+    await _commitEmLotes(upsertOps);
+
+    // 5) Cria documentos para itens sem _id e atualiza o array em memória
+    for (const item of arr) {
+      if (!item) continue;
+      if (!item._id) {
+        const { _id, ...dados } = item;
+        const ref = await colRef.add(dados);
+        item._id = ref.id;
+      }
+    }
+  }
+
+  try {
+    // Configurações (setores)
+    await db.collection("configuracoes").doc("geral").set({ setores: setores || [] }, { merge: true });
+
+    // Sincroniza coleções principais
+    await _syncCollection("usuarios", usuarios || []);
+    await _syncCollection("responsaveis", responsaveis || []);
+    await _syncCollection("servicos", servicosCadastro || []);
+    await _syncCollection("tickets", tickets || []);
+
+    console.log("✅ salvar(): sincronização com Firestore concluída.");
+  } catch (err) {
+    console.error("❌ salvar(): erro ao sincronizar com Firestore:", err);
+  }
+}
+
+
+/* ============================================================
+   LOGIN / LOGOUT
+   ============================================================ */
+function carregarLogin(){
+  document.getElementById("loginUser").innerHTML =
+    usuarios.map((u,i)=>`<option value="${i}">${u.nome} (${u.perfil})</option>`).join("");
+}
+
+function login(){
+  const idx = parseInt(document.getElementById("loginUser").value);
+  usuarioLogado = usuarios[idx];
+  document.getElementById("loginScreen").style.display = "none";
+  document.getElementById("crmApp").style.display      = "flex";
+  document.getElementById("usuarioInfo").innerHTML = "Usuário: <b>"+escHtml(usuarioLogado.nome)+"</b>";
+  document.getElementById("perfilInfo").innerHTML  = "Perfil: <b>"+escHtml(usuarioLogado.perfil)+"</b>";
+  atualizarSeletorVisao();
+  mostrarTickets();
+}
+
+function logout(){
+  usuarioLogado = null;
+  document.getElementById("crmApp").style.display      = "none";
+  document.getElementById("loginScreen").style.display = "flex";
+  document.getElementById("conteudo").innerHTML = "";
+}
+
+/* ============================================================
+   VISÃO / SETOR
+   ============================================================ */
+function atualizarSeletorVisao(){
+  const sel = document.getElementById("filtroVisao");
+  if(usuarioLogado.perfil === "adm"){
+    sel.innerHTML = '<option value="todos">Todos</option>' +
+      setores.map(s=>`<option>${escHtml(s)}</option>`).join("");
+    sel.disabled = false;
+  } else {
+    const setor = setorDoUsuario();
+    sel.innerHTML = `<option value="${escHtml(setor)}">${escHtml(setor||"Sem setor")}</option>`;
+    sel.disabled = true;
+  }
+}
+
+function setorDoUsuario(){
+  const r = responsaveis.find(r => r.nome === usuarioLogado.nome);
+  return r ? r.setor : "";
+}
+
+function ticketsVisiveis(){
+  if(usuarioLogado.perfil === "adm"){
+    const visao = document.getElementById("filtroVisao")?.value || "todos";
+    return visao === "todos" ? [...tickets] : tickets.filter(t => t.setor === visao);
+  }
+  const setor = setorDoUsuario();
+  return tickets.filter(t => t.setor === setor);
+}
+
+/* ============================================================
+   LÓGICA DE ALERTAS
+   ============================================================ */
+
+// Verifica se algum serviço foi marcado como INICIADO (mas não todos finalizados)
+function temServicoIniciado(t){
+  return (t.servicosTicket||[]).some(s => s.iniciado?.marcado && !s.finalizado?.marcado);
+}
+
+// Verifica se algum checkbox foi marcado (iniciado ou finalizado)
+function temCheckboxMarcado(t){
+  return (t.servicosTicket||[]).some(s => s.iniciado?.marcado || s.finalizado?.marcado);
+}
+
+// Retorna quantas horas se passaram desde a última atualização do ticket
+function horasDesdeUltimaAtualizacao(t){
+  const ref = t.ultimaAtualizacao || t.dataAbertura;
+  if(!ref) return 0;
+  return (new Date() - new Date(ref)) / 3600000;
+}
+
+// Alerta 48h: ticket tem serviço iniciado E última atualização > 48h
+function precisaAtualizacao48h(t){
+  if(t.status === "Concluído" || t.status === "Cancelado") return false;
+  if(!temServicoIniciado(t)) return false;
+  return horasDesdeUltimaAtualizacao(t) >= 48;
+}
+
+// Situação "Em Aberto com andamento": ticket tem serviços INICIADOS mas não concluído
+function estaEmAberto(t){
+  if(t.status==="Concluído"||t.status==="Cancelado") return false;
+  const srvs = t.servicosTicket||[];
+  if(!srvs.length) return false;
+  // Tem pelo menos 1 iniciado E nenhum finalizado ainda
+  return srvs.some(s=>s.iniciado?.marcado) && !srvs.some(s=>s.finalizado?.marcado);
+}
+
+// Situação "Liberado Parcialmente": ticket tem pelo menos 1 finalizado, mas não todos
+function estaLiberadoParcialmente(t){
+  if(t.status==="Concluído"||t.status==="Cancelado") return false;
+  const srvs = t.servicosTicket||[];
+  if(srvs.length<2) return false; // precisa de pelo menos 2 serviços para ser parcial
+  const qtdFin = srvs.filter(s=>s.finalizado?.marcado).length;
+  return qtdFin>0 && qtdFin<srvs.length;
+}
+
+// NOVO — Alerta 24h: ticket no Credenciamento, com serviços, sem nenhum INICIADO, há mais de 24h
+function precisaIniciarCredenciamento(t){
+  if(t.status === "Concluído" || t.status === "Cancelado") return false;
+  const noCredenciamento = (t.setor||"").toLowerCase().includes("credenci");
+  if(!noCredenciamento) return false;
+  const srvs = t.servicosTicket || [];
+  if(!srvs.length) return false;
+  if(srvs.some(s => s.iniciado?.marcado)) return false;
+  const ref = t.dataChegadaCredenciamento || t.dataAbertura;
+  if(!ref) return false;
+  return (new Date() - new Date(ref)) / 3600000 >= 24;
+}
+
+// NOVO — Pendência do Cliente: ticket com status "Aguardando cliente" e registro de pendência
+function estaPendenciaCliente(t){
+  return t.status === "Aguardando cliente";
+}
+
+// Retorna horas desde que chegou ao Credenciamento
+function horasNoCredenciamento(t){
+  const ref = t.dataChegadaCredenciamento || t.dataAbertura;
+  if(!ref) return 0;
+  return (new Date() - new Date(ref)) / 3600000;
+}
+
+/* ============================================================
+   CADASTROS
+   ============================================================ */
+function mostrarCadastros(){
+  document.getElementById("conteudo").innerHTML = `
+    <div class="card">
+      <h2 style="margin-top:0;">Cadastros</h2>
+      <div class="tabs">
+        <button class="btn-warning" onclick="abaServicos()">Serviços</button>
+        <button class="btn-warning" onclick="abaSetores()">Setores</button>
+        <button class="btn-warning" onclick="abaResponsaveis()">Responsáveis</button>
+        <button class="btn-warning" onclick="abaUsuarios()">Usuários</button>
+      </div>
+      <div id="abaConteudo"></div>
+    </div>`;
+  abaServicos();
+}
+
+/* ---- SERVIÇOS ---- */
+function abaServicos(){
+  const isAdm = usuarioLogado.perfil === "adm";
+  document.getElementById("abaConteudo").innerHTML = `
+    <h3>Serviços</h3>
+    ${isAdm ? `
+    <div style="display:grid;grid-template-columns:1fr 110px auto;gap:8px;margin-bottom:14px;padding:10px;background:#f4f6fb;border-radius:8px;">
+      <input id="novoServicoNome" placeholder="Nome do Serviço">
+      <input id="novoServicoSLA" type="number" placeholder="SLA (horas)" min="1">
+      <button class="btn-success" onclick="addServico()">+ Adicionar</button>
+    </div>` : ""}
+    ${servicosCadastro.length === 0
+      ? '<p style="color:#999;font-style:italic;">Nenhum serviço cadastrado.</p>'
+      : servicosCadastro.map((s,i)=>`
+          <div class="servico-item" id="srv-cad-${i}">
+            <input id="ed-sn-${i}" value="${escHtml(s.nome)}">
+            <input id="ed-ss-${i}" type="number" value="${s.sla}" min="1">
+            <button class="btn-info"   onclick="salvarServico(${i})">Salvar</button>
+            <button class="btn-danger" onclick="excluirServicoCad(${i})">Excluir</button>
+          </div>`).join("")}`;
+}
+
+function addServico(){
+  const nome = document.getElementById("novoServicoNome").value.trim();
+  const sla  = parseInt(document.getElementById("novoServicoSLA").value);
+  if(!nome){ alert("Informe o nome do serviço."); return; }
+  if(!sla||sla<=0){ alert("Informe um SLA válido (horas)."); return; }
+  servicosCadastro.push({nome,sla}); salvar(); abaServicos();
+}
+
+function salvarServico(i){
+  const nome = document.getElementById("ed-sn-"+i).value.trim();
+  const sla  = parseInt(document.getElementById("ed-ss-"+i).value);
+  if(!nome){ alert("Nome não pode ser vazio."); return; }
+  if(!sla||sla<=0){ alert("SLA deve ser maior que zero."); return; }
+  servicosCadastro[i]={nome,sla}; salvar();
+  const row = document.getElementById("srv-cad-"+i);
+  if(row){row.style.background="#d4edda";setTimeout(()=>row.style.background="",1000);}
+}
+
+function excluirServicoCad(i){
+  if(!confirm("Excluir serviço?")) return;
+  servicosCadastro.splice(i,1); salvar(); abaServicos();
+}
+
+/* ---- SETORES ---- */
+function abaSetores(){
+  document.getElementById("abaConteudo").innerHTML = `
+    <h3>Setores</h3>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input id="novoSetor" placeholder="Nome do Setor" style="flex:1;">
+      <button class="btn-success" onclick="addSetor()">+ Adicionar</button>
+    </div>
+    <ul style="padding:0;list-style:none;">
+      ${setores.map((s,i)=>`
+        <li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <input value="${escHtml(s)}" onchange="setores[${i}]=this.value;salvar()" style="flex:1;">
+          <button class="btn-danger" onclick="setores.splice(${i},1);salvar();abaSetores();atualizarSeletorVisao()">Excluir</button>
+        </li>`).join("")}
+    </ul>`;
+}
+
+function addSetor(){
+  const v = document.getElementById("novoSetor").value.trim();
+  if(!v){ alert("Informe o nome do setor."); return; }
+  setores.push(v); salvar(); abaSetores(); atualizarSeletorVisao();
+}
+
+/* ---- RESPONSÁVEIS ---- */
+function abaResponsaveis(){
+  document.getElementById("abaConteudo").innerHTML = `
+    <h3>Responsáveis</h3>
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+      <input id="novoRespNome" placeholder="Nome" style="flex:1;">
+      <select id="novoRespSetor" style="flex:1;">
+        ${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}
+      </select>
+      <button class="btn-success" onclick="addResponsavel()">+ Adicionar</button>
+    </div>
+    <ul style="padding:0;list-style:none;">
+      ${responsaveis.map((r,i)=>`
+        <li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <input value="${escHtml(r.nome)}" onchange="responsaveis[${i}].nome=this.value;salvar()" style="flex:1;">
+          <select onchange="responsaveis[${i}].setor=this.value;salvar()" style="flex:1;">
+            ${setores.map(s=>`<option ${s===r.setor?"selected":""}>${escHtml(s)}</option>`).join("")}
+          </select>
+          <button class="btn-danger" onclick="responsaveis.splice(${i},1);salvar();abaResponsaveis()">Excluir</button>
+        </li>`).join("")}
+    </ul>`;
+}
+
+function addResponsavel(){
+  const nome  = document.getElementById("novoRespNome").value.trim();
+  const setor = document.getElementById("novoRespSetor").value;
+  if(!nome){ alert("Informe o nome."); return; }
+  responsaveis.push({nome,setor}); salvar(); abaResponsaveis();
+}
+
+/* ---- USUÁRIOS ---- */
+function abaUsuarios(){
+  document.getElementById("abaConteudo").innerHTML = `
+    <h3>Usuários</h3>
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+      <input id="novoUserNome" placeholder="Nome" style="flex:1;">
+      <select id="novoUserPerfil" style="flex:1;">
+        <option value="usuario">Usuário</option>
+        <option value="adm">ADM</option>
+      </select>
+      <button class="btn-success" onclick="addUsuario()">+ Adicionar</button>
+    </div>
+    <ul style="padding:0;list-style:none;">
+      ${usuarios.map((u,i)=>`
+        <li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;">
+          <input value="${escHtml(u.nome)}" onchange="usuarios[${i}].nome=this.value;salvar();carregarLogin()" style="flex:1;">
+          <select onchange="usuarios[${i}].perfil=this.value;salvar();carregarLogin()" style="flex:1;">
+            <option value="usuario" ${u.perfil==="usuario"?"selected":""}>Usuário</option>
+            <option value="adm"     ${u.perfil==="adm"?"selected":""}>ADM</option>
+          </select>
+          <button class="btn-danger" onclick="usuarios.splice(${i},1);salvar();carregarLogin();abaUsuarios()">Excluir</button>
+        </li>`).join("")}
+    </ul>`;
+}
+
+function addUsuario(){
+  const nome   = document.getElementById("novoUserNome").value.trim();
+  const perfil = document.getElementById("novoUserPerfil").value;
+  if(!nome){ alert("Informe o nome."); return; }
+  usuarios.push({nome,perfil}); salvar(); carregarLogin(); abaUsuarios();
+}
+
+/* ============================================================
+   TICKETS — LISTA
+   ============================================================ */
+function mostrarTickets(){
+  const lista = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
+
+  const atrasados = lista.filter(t=>{
+    if(t.status==="Concluído"||t.status==="Cancelado") return false;
+    const s = calcularSLARestante(t); return s&&s.atrasado;
+  }).length;
+  const pendentes48   = lista.filter(t=>precisaAtualizacao48h(t)).length;
+  const semIniciar24  = lista.filter(t=>precisaIniciarCredenciamento(t)).length;
+  const qtdEmAberto   = lista.filter(t=>estaEmAberto(t)).length;
+  const qtdLibParcial = lista.filter(t=>estaLiberadoParcialmente(t)).length;
+  const qtdPendCliente = lista.filter(t=>estaPendenciaCliente(t)).length;
+
+  document.getElementById("conteudo").innerHTML = `
+    <div class="resumo-grid" style="grid-template-columns:repeat(5,1fr);margin-bottom:10px;">
+      <div class="resumo-card" style="background:#4e73df;cursor:pointer;" title="Em aberto" onclick="filtroRapido('abertos')">
+        <div class="resumo-num">${lista.filter(t=>t.status!=="Concluído"&&t.status!=="Cancelado").length}</div><div class="resumo-label">Em Aberto</div>
+      </div>
+      <div class="resumo-card" style="background:#1cc88a;cursor:pointer;" title="Ver concluídos" onclick="filtroRapido('concluidos')">
+        <div class="resumo-num">${lista.filter(t=>t.status==="Concluído").length}</div><div class="resumo-label">Concluídos</div>
+      </div>
+      <div class="resumo-card" style="background:#36b9cc;cursor:pointer;" title="Em Aberto no Credenciamento" onclick="filtroRapido('em_aberto_cred')">
+        <div class="resumo-num">${qtdEmAberto}</div><div class="resumo-label">Em Aberto (Cred.)</div>
+      </div>
+      <div class="resumo-card" style="background:#fd7e14;cursor:pointer;" title="Liberado Parcialmente" onclick="filtroRapido('lib_parcial')">
+        <div class="resumo-num">${qtdLibParcial}</div><div class="resumo-label">Lib. Parcialmente</div>
+      </div>
+      <div class="resumo-card" style="background:#e91e8c;cursor:pointer;" title="Pendência do Cliente" onclick="filtroRapido('pend_cliente')">
+        <div class="resumo-num">${qtdPendCliente}</div><div class="resumo-label">Pend. Cliente</div>
+      </div>
+    </div>
+    <div class="resumo-grid" style="grid-template-columns:repeat(3,1fr);">
+      <div class="resumo-card" style="background:#e74a3b;cursor:pointer;" title="Ver atrasados" onclick="filtroRapido('atrasados_sla')">
+        <div class="resumo-num">${atrasados}</div><div class="resumo-label">Atrasados SLA</div>
+      </div>
+      <div class="resumo-card" style="background:#c0392b;cursor:pointer;" title="Ver sem iniciar" onclick="filtroRapido('sem_iniciar_24')">
+        <div class="resumo-num">${semIniciar24}</div><div class="resumo-label">Cred. 24h s/ iniciar</div>
+      </div>
+      <div class="resumo-card" style="background:#f6c23e;color:#000;cursor:pointer;" title="Ver aguardando atualização" onclick="filtroRapido('alerta_48')">
+        <div class="resumo-num">${pendentes48}</div><div class="resumo-label">Aguard. Atualiz. (48h)</div>
+      </div>
+    </div>
+
+    <div class="card" style="border-left-color:#4e73df;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+        <h2 style="margin:0;">🎫 Tickets</h2>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+          <input id="buscaTicket" placeholder="🔍 Buscar..." style="width:180px;margin:0;" oninput="filtrarTickets()">
+          <select id="filtroStatus" onchange="filtrarTickets()" style="width:175px;margin:0;">
+            <option value="">Todos os status</option>
+            <option>Aberto</option>
+            <option>Em andamento</option>
+            <option>Aguardando cliente</option>
+            <option>Concluído</option>
+            <option>Cancelado</option>
+          </select>
+          <select id="filtroAlerta" onchange="filtrarTickets()" style="width:215px;margin:0;">
+            <option value="">Todas as situações</option>
+            <option value="abertos">📋 Em aberto (sem serviços)</option>
+            <option value="em_aberto_cred">🔵 Em Aberto (Cred. s/ finaliz.)</option>
+            <option value="lib_parcial">🟠 Liberado Parcialmente</option>
+            <option value="pend_cliente">💗 Pendência do Cliente</option>
+            <option value="atrasados_sla">🔴 Atrasados (SLA)</option>
+            <option value="sem_iniciar_24">🔴 Cred. 24h s/ iniciar</option>
+            <option value="alerta_48">🟡 Aguard. atualização (48h)</option>
+            <option value="iniciados">🔵 Em andamento (Cred.)</option>
+            <option value="concluidos">✅ Concluídos</option>
+          </select>
+          <button class="btn-dark" onclick="limparFiltros()" style="padding:6px 10px;white-space:nowrap;">✕ Limpar</button>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px;">
+        <span id="contadorTickets" style="font-size:12px;color:#888;">${lista.length} ticket(s) encontrado(s)</span>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;">
+          <button class="btn-success"  style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('abertos')">📋 Em aberto</button>
+          <button class="btn-info"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('em_aberto_cred')">🔵 Em Aberto Cred.</button>
+          <button class="btn-orange"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('lib_parcial')">🟠 Lib. Parcial</button>
+          <button class="btn-pink"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('pend_cliente')">💗 Pend. Cliente</button>
+          <button class="btn-danger"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('atrasados_sla')">🔴 Atrasados</button>
+          <button class="btn-warning"  style="font-size:11px;padding:3px 8px;color:#000;" onclick="filtroRapido('alerta_48')">🟡 48h</button>
+          <button style="background:#1cc88a;font-size:11px;padding:3px 8px;border:none;border-radius:6px;cursor:pointer;color:white;" onclick="filtroRapido('concluidos')">✅ Concluídos</button>
+        </div>
+      </div>
+      <div id="listaTickets">${renderListaTickets(lista)}</div>
+    </div>`;
+}
+
+function filtrarTickets(){
+  const busca  = (document.getElementById("buscaTicket")?.value||"").toLowerCase();
+  const status = document.getElementById("filtroStatus")?.value||"";
+  const alerta = document.getElementById("filtroAlerta")?.value||"";
+
+  let lista = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
+
+  // Filtro por status
+  if(status) lista = lista.filter(t => t.status === status);
+
+  // Filtro por situação/alerta
+  if(alerta === "abertos"){
+    lista = lista.filter(t => t.status !== "Concluído" && t.status !== "Cancelado");
+  } else if(alerta === "em_aberto_cred"){
+    lista = lista.filter(t => estaEmAberto(t));
+  } else if(alerta === "lib_parcial"){
+    lista = lista.filter(t => estaLiberadoParcialmente(t));
+  } else if(alerta === "pend_cliente"){
+    lista = lista.filter(t => estaPendenciaCliente(t));
+  } else if(alerta === "atrasados_sla"){
+    lista = lista.filter(t => {
+      if(t.status==="Concluído"||t.status==="Cancelado") return false;
+      const s = calcularSLARestante(t); return s && s.atrasado;
+    });
+  } else if(alerta === "sem_iniciar_24"){
+    lista = lista.filter(t => precisaIniciarCredenciamento(t));
+  } else if(alerta === "alerta_48"){
+    lista = lista.filter(t => precisaAtualizacao48h(t));
+  } else if(alerta === "iniciados"){
+    lista = lista.filter(t => temServicoIniciado(t));
+  } else if(alerta === "concluidos"){
+    lista = lista.filter(t => t.status === "Concluído" || t.status === "Cancelado");
+  }
+
+  // Filtro por texto
+  if(busca) lista = lista.filter(t =>
+    (t.titulo||"").toLowerCase().includes(busca)||
+    (t.cliente||"").toLowerCase().includes(busca)||
+    (t.id||"").toLowerCase().includes(busca)||
+    (t.responsavel||"").toLowerCase().includes(busca));
+
+  // Atualiza contagem acima da lista
+  const contEl = document.getElementById("contadorTickets");
+  if(contEl) contEl.textContent = `${lista.length} ticket(s) encontrado(s)`;
+
+  document.getElementById("listaTickets").innerHTML = renderListaTickets(lista);
+}
+
+function filtroRapido(valor){
+  const a = document.getElementById("filtroAlerta");
+  const s = document.getElementById("filtroStatus");
+  const b = document.getElementById("buscaTicket");
+  if(a){ a.value = valor; }
+  if(s){ s.value = ""; }
+  if(b){ b.value = ""; }
+  filtrarTickets();
+}
+
+function limparFiltros(){
+  const b = document.getElementById("buscaTicket");
+  const s = document.getElementById("filtroStatus");
+  const a = document.getElementById("filtroAlerta");
+  if(b) b.value="";
+  if(s) s.value="";
+  if(a) a.value="";
+  filtrarTickets();
+}
+
+function renderListaTickets(lista){
+  if(!lista.length) return '<p style="color:#999;text-align:center;padding:30px 0;">Nenhum ticket encontrado.</p>';
+
+  return lista.map(t=>{
+    const sla      = calcularSLARestante(t);
+    const atrasado = sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
+    const iniciado       = temServicoIniciado(t);
+    const alerta48       = precisaAtualizacao48h(t);
+    const semIniciar     = precisaIniciarCredenciamento(t);
+    const emAberto       = estaEmAberto(t);
+    const libParcial     = estaLiberadoParcialmente(t);
+    const pendCliente    = estaPendenciaCliente(t);
+
+    /*
+      Prioridade de cor da borda:
+      1. Atrasado SLA                        → vermelho vivo  (#e74a3b)
+      2. Credenciamento 24h sem INICIADO     → vermelho escuro (#c0392b)
+      3. Alerta 48h sem atualização          → amarelo        (#f6c23e)
+      4. Pendência do Cliente                → pink           (#e91e8c)
+      5. Liberado Parcialmente               → laranja        (#fd7e14)
+      6. Em Aberto (iniciado, s/ finalizado) → azul claro     (#36b9cc)
+      7. Serviço iniciado (sinal Comercial)  → azul           (#4e73df)
+      8. Padrão                              → cor do status
+    */
+    let bordaColor, bgColor;
+    if(atrasado){
+      bordaColor="#e74a3b"; bgColor="#fff8f8";
+    } else if(semIniciar){
+      bordaColor="#c0392b"; bgColor="#fdf0f0";
+    } else if(alerta48){
+      bordaColor="#f6c23e"; bgColor="#fffdf0";
+    } else if(pendCliente){
+      bordaColor="#e91e8c"; bgColor="#fef0f7";
+    } else if(libParcial){
+      bordaColor="#fd7e14"; bgColor="#fff8f2";
+    } else if(emAberto){
+      bordaColor="#36b9cc"; bgColor="#f0fbfd";
+    } else if(iniciado){
+      bordaColor="#4e73df"; bgColor="#eef2ff";
+    } else {
+      bordaColor=corStatus(t.status); bgColor="white";
+    }
+
+    const barColor = !sla?"#ccc":atrasado?"#e74a3b":sla.porcentagem>75?"#f6c23e":"#1cc88a";
+    const slaLabel = !sla?"":atrasado
+      ?`<span style="color:#e74a3b;font-size:11px;">⚠ Atrasado ${Math.abs(sla.horas).toFixed(1)}h</span>`
+      :`<span style="color:#777;font-size:11px;">SLA: ${sla.horas.toFixed(1)}h restantes</span>`;
+
+    const srvs    = t.servicosTicket||[];
+    const qtdFin  = srvs.filter(s=>s.finalizado?.marcado).length;
+    const srvBadge = srvs.length>0
+      ?`<span style="font-size:11px;color:#4e73df;margin-left:4px;">📦 ${qtdFin}/${srvs.length} finalizados</span>`
+      :"";
+
+    // Badge de situação — prioridade visual clara
+    let estadoBadge = "";
+    if(semIniciar){
+      const hCred = Math.round(horasNoCredenciamento(t));
+      estadoBadge = `<span class="badge" style="background:#c0392b;color:white;margin-left:4px;">🔴 ${hCred}h sem INICIAR (Cred.)</span>`;
+    } else if(alerta48){
+      estadoBadge = `<span class="alerta-48h">⏰ Atualização necessária (48h)</span>`;
+    } else if(pendCliente){
+      estadoBadge = `<span class="badge" style="background:#e91e8c;color:white;margin-left:4px;">💗 Pendência do Cliente</span>`;
+    } else if(libParcial){
+      estadoBadge = `<span class="badge" style="background:#fd7e14;color:white;margin-left:4px;">🟠 Liberado Parcialmente (${qtdFin}/${srvs.length})</span>`;
+    } else if(emAberto){
+      estadoBadge = `<span class="badge" style="background:#36b9cc;color:white;margin-left:4px;">🔵 Em Aberto (Cred.)</span>`;
+    } else if(iniciado){
+      estadoBadge = `<span class="badge" style="background:#4e73df;color:white;margin-left:4px;">🔵 Em andamento (Cred.)</span>`;
+    }
+
+    return `
+      <div class="ticket-card" style="border-left:5px solid ${bordaColor};background:${bgColor};"
+           onclick="verTicket('${t.id}')">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+          <div style="min-width:0;">
+            <span style="font-size:11px;color:#aaa;">#${t.id}</span>
+            <strong style="display:block;font-size:14px;margin:2px 0;">${escHtml(t.titulo)}</strong>
+            <span style="font-size:12px;color:#666;">${escHtml(t.cliente||"")} &bull; ${escHtml(t.setor||"")} &bull; ${escHtml(t.responsavel||"Sem responsável")}</span>
+            <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+              ${srvBadge}${estadoBadge}
+            </div>
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <span class="badge" style="background:${corStatus(t.status)};color:white;">${t.status}</span>
+            <span class="badge" style="background:${corPrioridade(t.prioridade)};color:${t.prioridade==="Alta"?"#000":"white"};margin-left:3px;">${t.prioridade}</span>
+            <div style="font-size:11px;color:#bbb;margin-top:4px;">${formatarData(t.dataAbertura)}</div>
+          </div>
+        </div>
+        ${sla?`
+        <div style="margin-top:8px;">
+          <div style="background:#eee;border-radius:4px;height:4px;overflow:hidden;">
+            <div style="width:${sla.porcentagem}%;background:${barColor};height:100%;"></div>
+          </div>
+          <div style="margin-top:3px;">${slaLabel}</div>
+        </div>`:""}
+      </div>`;
+  }).join("");
+}
+
+/* ============================================================
+   NOVO TICKET
+   ============================================================ */
+function novoTicket(){
+  _srvTemp=[];
+  document.getElementById("conteudo").innerHTML = `
+    <div class="card" style="border-left-color:#4e73df;max-width:760px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+        <button class="btn-dark" onclick="mostrarTickets()">← Voltar</button>
+        <h2 style="margin:0;">Novo Ticket</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <div style="grid-column:1/-1;">
+          <label><b>Título / Assunto *</b></label>
+          <input id="nt_titulo" placeholder="Descreva resumidamente o problema ou solicitação">
+        </div>
+        <div>
+          <label><b>Cliente *</b></label>
+          <input id="nt_cliente" placeholder="Nome do cliente">
+        </div>
+        <div>
+          <label><b>Setor *</b></label>
+          <select id="nt_setor" onchange="filtrarRespNovo()">
+            <option value="">-- Selecione --</option>
+            ${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label><b>Responsável</b></label>
+          <select id="nt_responsavel">
+            <option value="">-- Selecione o setor primeiro --</option>
+          </select>
+        </div>
+        <div>
+          <label><b>Prioridade</b></label>
+          <select id="nt_prioridade">
+            <option>Baixa</option><option selected>Normal</option>
+            <option>Alta</option><option>Urgente</option>
+          </select>
+        </div>
+        <div>
+          <label><b>Status Inicial</b></label>
+          <select id="nt_status">
+            <option>Aberto</option><option>Em andamento</option>
+          </select>
+        </div>
+        <div>
+          <label><b>Canal de Entrada</b></label>
+          <select id="nt_canal">
+            <option>E-mail</option><option>Telefone</option><option>WhatsApp</option>
+            <option>Chat</option><option>Presencial</option><option>Sistema</option>
+          </select>
+        </div>
+
+        <!-- SERVIÇOS -->
+        <div style="grid-column:1/-1;">
+          <label><b>Serviços do Ticket</b></label>
+          <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;">
+            <select id="nt_srv_sel" style="flex:1;margin:0;">
+              <option value="">-- Selecione um serviço --</option>
+              ${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA: ${s.sla}h)</option>`).join("")}
+            </select>
+            <button class="btn-info" onclick="adicionarSrvTemp()">+ Adicionar Serviço</button>
+          </div>
+          <div id="nt_srv_lista"></div>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label><b>Descrição / Detalhes</b></label>
+          <textarea id="nt_descricao" rows="4" placeholder="Descreva o problema com detalhes..."></textarea>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label><b>Observações Internas</b></label>
+          <textarea id="nt_obs" rows="2" placeholder="Notas internas (não visível ao cliente)"></textarea>
+        </div>
+      </div>
+      <div style="margin-top:18px;display:flex;gap:10px;">
+        <button class="btn-success" onclick="salvarNovoTicket()">✔ Criar Ticket</button>
+        <button class="btn-dark"    onclick="mostrarTickets()">Cancelar</button>
+      </div>
+    </div>`;
+  renderSrvTemp();
+}
+
+function filtrarRespNovo(){
+  const setor = document.getElementById("nt_setor").value;
+  document.getElementById("nt_responsavel").innerHTML =
+    '<option value="">-- Selecione --</option>' +
+    responsaveis.filter(r=>r.setor===setor).map(r=>`<option>${escHtml(r.nome)}</option>`).join("");
+}
+
+function adicionarSrvTemp(){
+  const nome=document.getElementById("nt_srv_sel").value;
+  if(!nome){alert("Selecione um serviço.");return;}
+  if(_srvTemp.find(s=>s.nome===nome)){alert("Serviço já adicionado.");return;}
+  _srvTemp.push({nome,iniciado:{marcado:false,usuario:"",responsavel:"",obs:"",data:""},finalizado:{marcado:false,usuario:"",data:""}});
+  renderSrvTemp();
+}
+
+function removerSrvTemp(nome){
+  _srvTemp=_srvTemp.filter(s=>s.nome!==nome); renderSrvTemp();
+}
+
+function renderSrvTemp(){
+  const el=document.getElementById("nt_srv_lista");
+  if(!el)return;
+  if(!_srvTemp.length){el.innerHTML='<p style="color:#aaa;font-size:12px;margin:4px 0;">Nenhum serviço adicionado ainda.</p>';return;}
+  el.innerHTML=`
+    <table class="srv-table">
+      <tr><th>Serviço</th><th></th></tr>
+      ${_srvTemp.map(s=>`
+        <tr>
+          <td>${escHtml(s.nome)}</td>
+          <td><button class="btn-danger" onclick="removerSrvTemp('${escHtml(s.nome).replace(/'/g,"\\'")}')">Remover</button></td>
+        </tr>`).join("")}
+    </table>`;
+}
+
+async function salvarNovoTicket(){
+  const titulo     =document.getElementById("nt_titulo").value.trim();
+  const cliente    =document.getElementById("nt_cliente").value.trim();
+  const setor      =document.getElementById("nt_setor").value;
+  const responsavel=document.getElementById("nt_responsavel").value;
+  const prioridade =document.getElementById("nt_prioridade").value;
+  const status     =document.getElementById("nt_status").value;
+  const canal      =document.getElementById("nt_canal").value;
+  const descricao  =document.getElementById("nt_descricao").value.trim();
+  const obs        =document.getElementById("nt_obs").value.trim();
+
+  if(!titulo) {alert("Informe o título.");document.getElementById("nt_titulo").focus();return;}
+  if(!cliente){alert("Informe o cliente.");document.getElementById("nt_cliente").focus();return;}
+  if(!setor)  {alert("Selecione o setor.");document.getElementById("nt_setor").focus();return;}
+
+  const agr = agora();
+  const ticket={
+    id:gerarId(), titulo,cliente,setor,responsavel,prioridade,status,canal,descricao,obs,
+    abertoPor:usuarioLogado.nome,
+    dataAbertura:agr,
+    ultimaAtualizacao:agr,
+    dataChegadaCredenciamento:(setor||'').toLowerCase().includes('credenci') ? agr : null,
+    servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),
+    historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]
+  };
+  tickets.unshift(ticket);
+await salvarTicket(ticket);
+_srvTemp=[];
+  mostrarTickets();
+}
+
+/* ============================================================
+   VER / EDITAR TICKET
+   ============================================================ */
+function verTicket(id){
+  const t=tickets.find(x=>x.id===id);
+  if(!t){alert("Ticket não encontrado.");return;}
+
+  const sla         =calcularSLARestante(t);
+  const atrasado    =sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
+  const iniciado    =temServicoIniciado(t);
+  const alerta48    =precisaAtualizacao48h(t);
+  const semIniciar  =precisaIniciarCredenciamento(t);
+  const emAberto    =estaEmAberto(t);
+  const libParcial  =estaLiberadoParcialmente(t);
+  const pendCliente =estaPendenciaCliente(t);
+
+  let bordaColor;
+  if(atrasado)         bordaColor="#e74a3b";
+  else if(semIniciar)  bordaColor="#c0392b";
+  else if(alerta48)    bordaColor="#f6c23e";
+  else if(pendCliente) bordaColor="#e91e8c";
+  else if(libParcial)  bordaColor="#fd7e14";
+  else if(emAberto)    bordaColor="#36b9cc";
+  else if(iniciado)    bordaColor="#4e73df";
+  else                 bordaColor=corStatus(t.status);
+
+  const hDesde  = horasDesdeUltimaAtualizacao(t);
+  const hNoCred = Math.round(horasNoCredenciamento(t));
+
+  document.getElementById("conteudo").innerHTML = `
+    <div class="card" style="border-left-color:${bordaColor};max-width:780px;">
+
+      <!-- Cabeçalho -->
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;">
+        <button class="btn-dark" onclick="mostrarTickets()">← Voltar</button>
+        <h2 style="margin:0;">Ticket #${t.id}</h2>
+        <span class="badge" style="background:${corStatus(t.status)};color:white;">${t.status}</span>
+        <span class="badge" style="background:${corPrioridade(t.prioridade)};color:${t.prioridade==="Alta"?"#000":"white"};">${t.prioridade}</span>
+        ${atrasado?'<span class="badge" style="background:#e74a3b;color:white;">⚠ ATRASADO SLA</span>':""}
+        ${semIniciar?`<span class="badge" style="background:#c0392b;color:white;">🔴 ${hNoCred}h no Cred. sem INICIAR</span>`:""}
+        ${alerta48&&!semIniciar?`<span class="alerta-48h">⏰ Atualizar agora (${Math.round(hDesde)}h sem update)</span>`:""}
+        ${libParcial&&!alerta48&&!semIniciar?(()=>{const srvs=t.servicosTicket||[];const q=srvs.filter(s=>s.finalizado?.marcado).length;return `<span class="badge" style="background:#fd7e14;color:white;">🟠 Liberado Parcialmente (${q}/${srvs.length})</span>`;})():""}
+        ${pendCliente&&!alerta48&&!semIniciar?'<span class="badge" style="background:#e91e8c;color:white;">💗 Pendência do Cliente</span>':""}
+        ${emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#36b9cc;color:white;">🔵 Em Aberto (Cred.)</span>':""}
+        ${iniciado&&!emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#4e73df;color:white;">🔵 Em andamento (Cred.)</span>':""}
+      </div>
+      <div style="font-size:12px;color:#888;margin-bottom:16px;">
+        Aberto por <b>${escHtml(t.abertoPor)}</b> em ${formatarData(t.dataAbertura)} &bull; Canal: ${escHtml(t.canal||"-")}
+        &bull; Última atualização: <b>${formatarData(t.ultimaAtualizacao)}</b>
+        ${t.dataChegadaCredenciamento?`&bull; Chegou ao Credenciamento: <b>${formatarData(t.dataChegadaCredenciamento)}</b>`:""}
+      </div>
+
+      ${semIniciar?`
+      <div style="background:#fdf0f0;border:1px solid #c0392b;border-radius:8px;padding:12px;margin-bottom:14px;">
+        <b style="color:#c0392b;">🔴 Atenção! ${hNoCred}h sem ninguém iniciar os serviços!</b><br>
+        <span style="font-size:12px;color:#7b241c;">Este ticket chegou ao Credenciamento há ${hNoCred}h e nenhum serviço foi marcado como INICIADO. Atribua um responsável e inicie o atendimento.</span>
+      </div>`:""}
+
+      ${alerta48&&!semIniciar?`
+      <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:8px;padding:12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
+        <div>
+          <b>⏰ Este ticket precisa de uma atualização!</b><br>
+          <span style="font-size:12px;color:#856404;">Passaram ${Math.round(hDesde)}h desde a última atualização. Registre o que está acontecendo.</span>
+        </div>
+        <button class="btn-warning" style="color:#000;flex-shrink:0;" onclick="abrirModalAtualizacao('${t.id}')">Registrar Atualização</button>
+      </div>`:""}
+
+      ${pendCliente&&t.pendenciaCliente?`
+      <div style="background:#fce4ec;border:1px solid #e91e8c;border-radius:8px;padding:12px;margin-bottom:14px;">
+        <b style="color:#e91e8c;">💗 Pendência do Cliente</b><br>
+        <span style="font-size:13px;color:#880e4f;white-space:pre-wrap;">${escHtml(t.pendenciaCliente)}</span>
+        <div style="font-size:11px;color:#999;margin-top:6px;">
+          Registrado por <b>${escHtml(t.pendenciaClienteResp||"")}</b> em ${formatarData(t.pendenciaClienteData||"")}
+        </div>
+      </div>`:""}
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+
+        <div style="grid-column:1/-1;">
+          <label><b>Título</b></label>
+          <input id="vt_titulo" value="${escHtml(t.titulo)}">
+        </div>
+        <div>
+          <label><b>Cliente</b></label>
+          <input id="vt_cliente" value="${escHtml(t.cliente||"")}">
+        </div>
+        <div>
+          <label><b>Setor Atual</b></label>
+          <input value="${escHtml(t.setor||"")}" disabled style="background:#f5f5f5;color:#666;">
+        </div>
+        <div>
+          <label><b>Responsável</b></label>
+          <select id="vt_responsavel">
+            <option value="">-- Sem responsável --</option>
+            ${responsaveis.filter(r=>r.setor===t.setor).map(r=>
+              `<option ${r.nome===t.responsavel?"selected":""}>${escHtml(r.nome)}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label><b>Prioridade</b></label>
+          <select id="vt_prioridade">
+            ${["Baixa","Normal","Alta","Urgente"].map(p=>`<option ${p===t.prioridade?"selected":""}>${p}</option>`).join("")}
+          </select>
+        </div>
+        <div>
+          <label><b>Status</b></label>
+          <select id="vt_status">
+            ${["Aberto","Em andamento","Aguardando cliente","Concluído","Cancelado"].map(s=>
+              `<option ${s===t.status?"selected":""}>${s}</option>`).join("")}
+          </select>
+        </div>
+
+        ${sla?`
+        <div style="grid-column:1/-1;">
+          <label><b>SLA</b></label>
+          <div style="background:#eee;border-radius:6px;height:10px;overflow:hidden;margin:4px 0;">
+            <div style="width:${sla.porcentagem}%;background:${atrasado?"#e74a3b":sla.porcentagem>75?"#f6c23e":"#1cc88a"};height:100%;"></div>
+          </div>
+          <small>${atrasado?`⚠ Atrasado há ${Math.abs(sla.horas).toFixed(1)}h`:`${sla.horas.toFixed(1)}h restantes de SLA`}</small>
+        </div>`:""}
+
+        <!-- SERVIÇOS COM CHECKBOXES -->
+        <div style="grid-column:1/-1;">
+          <label><b>Serviços do Ticket</b></label>
+          <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;">
+            <select id="vt_srv_sel" style="flex:1;margin:0;">
+              <option value="">-- Adicionar serviço --</option>
+              ${servicosCadastro.map(s=>
+                `<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA: ${s.sla}h)</option>`).join("")}
+            </select>
+            <button class="btn-info" onclick="adicionarSrvTicket('${t.id}')">+ Adicionar Serviço</button>
+          </div>
+          <div id="tabelaSrvWrap">${renderTabelaServicosTicket(t)}</div>
+        </div>
+
+        <div style="grid-column:1/-1;">
+          <label><b>Descrição</b></label>
+          <textarea id="vt_descricao" rows="4">${escHtml(t.descricao||"")}</textarea>
+        </div>
+        <div style="grid-column:1/-1;">
+          <label><b>Observações Internas</b></label>
+          <textarea id="vt_obs" rows="2">${escHtml(t.obs||"")}</textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
+        <button class="btn-primary" onclick="atualizarTicket('${t.id}')">💾 Salvar Alterações</button>
+        <button class="btn-purple"  onclick="abrirModalTransf('${t.id}')">🔀 Transferir Setor</button>
+        <button class="btn-danger"  onclick="excluirTicket('${t.id}')">🗑 Excluir Ticket</button>
+        <button class="btn-dark"    onclick="mostrarTickets()">Cancelar</button>
+      </div>
+    </div>
+
+    <!-- Histórico -->
+    <div class="card evolucao" style="max-width:780px;">
+      <h3 style="margin-top:0;">📋 Histórico / Log de Atualizações</h3>
+      <div id="historicoLista">${renderHistorico(t.historico||[])}</div>
+      <div style="margin-top:14px;">
+        <label style="font-weight:600;font-size:13px;">✏️ Registrar atualização manual:</label>
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <textarea id="novaEvolucao" rows="2"
+            placeholder="Descreva o que aconteceu, próximos passos, etc. Será salvo com data e hora."
+            style="flex:1;padding:8px;border-radius:6px;border:1px solid #ccc;font-family:inherit;resize:vertical;"></textarea>
+          <button class="btn-success" style="align-self:flex-end;" onclick="adicionarEvolucao('${t.id}')">Registrar</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+/* ============================================================
+   TABELA DE SERVIÇOS COM CHECKBOXES
+   ============================================================ */
+function renderTabelaServicosTicket(t){
+  const srvs=t.servicosTicket||[];
+  if(!srvs.length)
+    return '<p style="color:#aaa;font-size:12px;margin:4px 0;">Nenhum serviço adicionado.</p>';
+
+  return `
+    <table class="srv-table">
+      <tr>
+        <th>Serviço</th>
+        <th style="text-align:center;width:210px;">✅ Iniciado</th>
+        <th style="text-align:center;width:210px;">🏁 Finalizado</th>
+        <th style="width:80px;"></th>
+      </tr>
+      ${srvs.map((s,i)=>`
+        <tr>
+          <td><b>${escHtml(s.nome)}</b></td>
+
+          <!-- INICIADO -->
+          <td>
+            <div class="chk-cell">
+              <div class="chk-row">
+                <input type="checkbox" id="chk_ini_${i}"
+                  ${s.iniciado?.marcado?"checked":""}
+                  onchange="aoClicarIniciado('${t.id}',${i},this.checked)">
+                <label for="chk_ini_${i}" style="cursor:pointer;font-size:12px;">
+                  ${s.iniciado?.marcado
+                    ?`<span class="chk-ok">Iniciado</span>`
+                    :`<span style="color:#aaa;">Pendente</span>`}
+                </label>
+              </div>
+              ${s.iniciado?.marcado?`
+                <span class="chk-resp">👤 ${escHtml(s.iniciado.responsavel||s.iniciado.usuario)}</span>
+                <span class="chk-info">${escHtml(s.iniciado.usuario)} &bull; ${formatarData(s.iniciado.data)}</span>
+                ${s.iniciado.obs?`<span class="chk-info" style="color:#666;font-style:italic;">"${escHtml(s.iniciado.obs)}"</span>`:""}
+              `:""}
+            </div>
+          </td>
+
+          <!-- FINALIZADO -->
+          <td>
+            <div class="chk-cell">
+              <div class="chk-row">
+                <input type="checkbox" id="chk_fin_${i}"
+                  ${s.finalizado?.marcado?"checked":""}
+                  onchange="aoClicarFinalizado('${t.id}',${i},this.checked)">
+                <label for="chk_fin_${i}" style="cursor:pointer;font-size:12px;">
+                  ${s.finalizado?.marcado
+                    ?`<span class="chk-ok">Finalizado</span>`
+                    :`<span style="color:#aaa;">Pendente</span>`}
+                </label>
+              </div>
+              ${s.finalizado?.marcado?`
+                <span class="chk-resp">👤 ${escHtml(s.finalizado.responsavel||s.finalizado.usuario)}</span>
+                <span class="chk-info">${escHtml(s.finalizado.usuario)} &bull; ${formatarData(s.finalizado.data)}</span>
+                ${s.finalizado.obs?`<span class="chk-info" style="color:#666;font-style:italic;">"${escHtml(s.finalizado.obs)}"</span>`:""}
+              `:""}
+            </div>
+          </td>
+
+          <td>
+            <button class="btn-danger" style="font-size:11px;padding:4px 8px;"
+              onclick="removerSrvTicket('${t.id}',${i})">Remover</button>
+          </td>
+        </tr>`).join("")}
+    </table>`;
+}
+
+/* Clique no checkbox INICIADO — se marcando, abre modal */
+function aoClicarIniciado(ticketId, srvIdx, marcado){
+  if(marcado){
+    // Abrir modal para escolher responsável
+    _pendIniciado = {ticketId, srvIdx};
+    const t   = tickets.find(x=>x.id===ticketId);
+    const srv = (t?.servicosTicket||[])[srvIdx];
+
+    document.getElementById("modalIniciadoInfo").textContent =
+      `Serviço: "${srv?.nome||""}" — Ticket #${ticketId}`;
+
+    // Preenche o select com todos os responsáveis (prioritariamente do Credenciamento)
+    const todosResp = responsaveis.length
+      ? responsaveis
+      : usuarios.map(u=>({nome:u.nome,setor:""}));
+    document.getElementById("modalIniciadoResp").innerHTML =
+      '<option value="">-- Selecione o responsável --</option>' +
+      todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+
+    document.getElementById("modalIniciadoObs").value = "";
+    document.getElementById("modalIniciado").style.display = "flex";
+  } else {
+    // Desmarcar: limpa dados de iniciado
+    desmarcarIniciado(ticketId, srvIdx);
+  }
+}
+
+function cancelarIniciado(){
+  // Desmarcar o checkbox visualmente sem salvar
+  const {srvIdx} = _pendIniciado;
+  const chk = document.getElementById("chk_ini_"+srvIdx);
+  if(chk) chk.checked = false;
+  _pendIniciado = {ticketId:null,srvIdx:null};
+  fecharModal("modalIniciado");
+}
+
+function confirmarIniciado(){
+  const {ticketId,srvIdx} = _pendIniciado;
+  if(!ticketId && srvIdx===null){ fecharModal("modalIniciado"); return; }
+
+  const respVal = document.getElementById("modalIniciadoResp").value.trim();
+  // Remove sufixo "(Setor)" se houver
+  const responsavelNome = respVal.split(" (")[0];
+
+  if(!responsavelNome){
+    alert("Selecione o responsável.");
+    return;
+  }
+
+  const obs = document.getElementById("modalIniciadoObs").value.trim();
+
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalIniciado"); return; }
+
+  const srv = tickets[idx].servicosTicket[srvIdx];
+  srv.iniciado = {
+    marcado:      true,
+    usuario:      usuarioLogado.nome,
+    responsavel:  responsavelNome,
+    obs:          obs,
+    data:         agora()
+  };
+
+  const acao = `Serviço "${srv.nome}" INICIADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}`;
+  _logHistorico(idx, acao);
+  tickets[idx].ultimaAtualizacao = agora();
+  salvar();
+
+  fecharModal("modalIniciado");
+  _pendIniciado={ticketId:null,srvIdx:null};
+
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+}
+
+function desmarcarIniciado(ticketId, srvIdx){
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0)return;
+  const srv = tickets[idx].servicosTicket[srvIdx];
+  const nomeResp = srv.iniciado?.responsavel||"";
+  srv.iniciado = {marcado:false,usuario:"",responsavel:"",obs:"",data:""};
+  _logHistorico(idx,`Serviço "${srv.nome}" desmarcado como iniciado${nomeResp?` (era: ${nomeResp})`:""}`);
+  tickets[idx].ultimaAtualizacao = agora();
+  salvar();
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+}
+
+/* Clique no checkbox FINALIZADO — se marcando, abre modal de responsável */
+function aoClicarFinalizado(ticketId, srvIdx, marcado){
+  if(marcado){
+    _pendFinalizado = {ticketId, srvIdx};
+    const t   = tickets.find(x=>x.id===ticketId);
+    const srv = (t?.servicosTicket||[])[srvIdx];
+
+    document.getElementById("modalFinalizadoInfo").textContent =
+      `Serviço: "${srv?.nome||""}" — Ticket #${ticketId}`;
+
+    // Verifica se este é o último serviço a ser finalizado (para alertar)
+    const srvs = t?.servicosTicket||[];
+    const outrosNaoFin = srvs.filter((_,i)=>i!==srvIdx&&!_.finalizado?.marcado);
+    const aviso = document.getElementById("avisoUltimoServico");
+    if(aviso){
+      aviso.style.display = outrosNaoFin.length===0 ? "block" : "none";
+    }
+
+    const todosResp = responsaveis.length
+      ? responsaveis
+      : usuarios.map(u=>({nome:u.nome,setor:""}));
+    document.getElementById("modalFinalizadoResp").innerHTML =
+      '<option value="">-- Selecione o responsável --</option>' +
+      todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+
+    document.getElementById("modalFinalizadoObs").value="";
+    document.getElementById("modalFinalizado").style.display="flex";
+  } else {
+    // Desmarcar: abre modal pedindo responsável e motivo
+    _pendDesmarcarFin = {ticketId, srvIdx};
+    const t2  = tickets.find(x=>x.id===ticketId);
+    const srv2 = (t2?.servicosTicket||[])[srvIdx];
+    document.getElementById("modalDesmarcarFinInfo").textContent =
+      `Serviço: "${srv2?.nome||""}" — Ticket #${ticketId}`;
+    const todosResp2 = responsaveis.length
+      ? responsaveis
+      : usuarios.map(u=>({nome:u.nome,setor:""}));
+    document.getElementById("modalDesmarcarFinResp").innerHTML =
+      '<option value="">-- Selecione o responsável --</option>' +
+      todosResp2.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+    document.getElementById("modalDesmarcarFinObs").value="";
+    document.getElementById("modalDesmarcarFin").style.display="flex";
+  }
+}
+
+function cancelarDesmarcarFin(){
+  // Recolocar o checkbox como marcado (o usuário cancelou)
+  const {srvIdx} = _pendDesmarcarFin;
+  const chk = document.getElementById("chk_fin_"+srvIdx);
+  if(chk) chk.checked = true;
+  _pendDesmarcarFin={ticketId:null,srvIdx:null};
+  fecharModal("modalDesmarcarFin");
+}
+
+function confirmarDesmarcarFin(){
+  const {ticketId, srvIdx} = _pendDesmarcarFin;
+  if(!ticketId && srvIdx===null){ fecharModal("modalDesmarcarFin"); return; }
+
+  const respVal = document.getElementById("modalDesmarcarFinResp").value.trim();
+  const responsavelNome = respVal.split(" (")[0];
+  if(!responsavelNome){ alert("Selecione o responsável."); return; }
+
+  const obs = document.getElementById("modalDesmarcarFinObs").value.trim();
+  const idx  = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalDesmarcarFin"); return; }
+
+  const srv  = tickets[idx].servicosTicket[srvIdx];
+  const agr  = agora();
+
+  // Se o ticket estava Concluído, reabre
+  const estavaConcluido = tickets[idx].status==="Concluído";
+  if(estavaConcluido){
+    tickets[idx].status       = "Em andamento";
+    tickets[idx].dataConclusao = null;
+    _logHistorico(idx, `Ticket reaberto — serviço "${srv.nome}" desmarcado como finalizado por ${responsavelNome}`);
+  }
+
+  // Limpa os dados de finalizado e registra quem desmarcou
+  const nomeAnterior = srv.finalizado?.responsavel || srv.finalizado?.usuario || "";
+  srv.finalizado = { marcado:false, usuario:"", responsavel:"", obs:"", data:"" };
+
+  const acao = `Serviço "${srv.nome}" DESMARCADO como finalizado — por: ${responsavelNome}${obs?` — Motivo: "${obs}"`:""}${nomeAnterior?` (finalizador anterior: ${nomeAnterior})`:""}`;
+  _logHistorico(idx, acao);
+  tickets[idx].ultimaAtualizacao = agr;
+
+  salvar();
+  fecharModal("modalDesmarcarFin");
+  _pendDesmarcarFin={ticketId:null,srvIdx:null};
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+
+  if(estavaConcluido) verTicket(ticketId);
+}
+
+function cancelarFinalizado(){
+  const {srvIdx} = _pendFinalizado;
+  const chk = document.getElementById("chk_fin_"+srvIdx);
+  if(chk) chk.checked = false;
+  _pendFinalizado={ticketId:null,srvIdx:null};
+  fecharModal("modalFinalizado");
+}
+
+function confirmarFinalizado(){
+  const {ticketId, srvIdx} = _pendFinalizado;
+  if(!ticketId && srvIdx===null){ fecharModal("modalFinalizado"); return; }
+
+  const respVal = document.getElementById("modalFinalizadoResp").value.trim();
+  const responsavelNome = respVal.split(" (")[0];
+
+  if(!responsavelNome){
+    alert("Selecione o responsável.");
+    return;
+  }
+
+  const obs = document.getElementById("modalFinalizadoObs").value.trim();
+  const idx  = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalFinalizado"); return; }
+
+  const srv = tickets[idx].servicosTicket[srvIdx];
+  const agr = agora();
+
+  srv.finalizado = {
+    marcado:     true,
+    usuario:     usuarioLogado.nome,
+    responsavel: responsavelNome,
+    obs:         obs,
+    data:        agr
+  };
+
+  const acao = `Serviço "${srv.nome}" FINALIZADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}`;
+  _logHistorico(idx, acao);
+  tickets[idx].ultimaAtualizacao = agr;
+
+  // ─── REGRA: se TODOS os serviços estão finalizados → ticket CONCLUÍDO ───
+  const srvs = tickets[idx].servicosTicket||[];
+  const todosFinalizados = srvs.length>0 && srvs.every(s=>s.finalizado?.marcado);
+  if(todosFinalizados && tickets[idx].status!=="Concluído"){
+    const statusAntigo = tickets[idx].status;
+    tickets[idx].status = "Concluído";
+    tickets[idx].dataConclusao = agr;
+    _logHistorico(idx,
+      `✅ Ticket CONCLUÍDO automaticamente — todos os ${srvs.length} serviço(s) foram finalizados (status anterior: "${statusAntigo}")`
+    );
+  }
+
+  salvar();
+  fecharModal("modalFinalizado");
+  _pendFinalizado={ticketId:null,srvIdx:null};
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+
+  // Atualiza badge de status no cabeçalho da tela sem recarregar tudo
+  if(todosFinalizados){
+    // Recarrega a tela do ticket para refletir o novo status CONCLUÍDO
+    verTicket(ticketId);
+  }
+}
+
+// desmarcarFinalizado agora tratado via modal confirmarDesmarcarFin()
+
+/* Adiciona serviço ao ticket já salvo */
+function adicionarSrvTicket(id){
+  const nome=document.getElementById("vt_srv_sel").value;
+  if(!nome){alert("Selecione um serviço.");return;}
+  const idx=tickets.findIndex(t=>t.id===id);
+  if(idx<0)return;
+  if(!tickets[idx].servicosTicket) tickets[idx].servicosTicket=[];
+  if(tickets[idx].servicosTicket.find(s=>s.nome===nome)){alert("Serviço já adicionado.");return;}
+  tickets[idx].servicosTicket.push({
+    nome,
+    iniciado:  {marcado:false,usuario:"",responsavel:"",obs:"",data:""},
+    finalizado:{marcado:false,usuario:"",data:""}
+  });
+  _logHistorico(idx,`Serviço adicionado: "${nome}"`);
+  salvar();
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+}
+
+/* Remove serviço do ticket */
+function removerSrvTicket(id,i){
+  const idx=tickets.findIndex(t=>t.id===id);
+  if(idx<0)return;
+  const nome=tickets[idx].servicosTicket[i]?.nome||"?";
+  if(!confirm(`Remover o serviço "${nome}"?`))return;
+  tickets[idx].servicosTicket.splice(i,1);
+  _logHistorico(idx,`Serviço removido: "${nome}"`);
+  salvar();
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+}
+
+/* ============================================================
+   MODAL ATUALIZAÇÃO 48H
+   ============================================================ */
+function abrirModalAtualizacao(id){
+  _pendAtualizacao={ticketId:id};
+  const t=tickets.find(x=>x.id===id);
+  const h=Math.round(horasDesdeUltimaAtualizacao(t));
+  document.getElementById("modalAtualizacaoInfo").textContent =
+    `Ticket #${id} — "${t?.titulo||""}" | ${h}h sem atualização`;
+  document.getElementById("modalAtualizacaoTexto").value="";
+  document.getElementById("modalAtualizacao").style.display="flex";
+}
+
+function confirmarAtualizacao(){
+  const texto=document.getElementById("modalAtualizacaoTexto").value.trim();
+  if(!texto){alert("Informe a atualização.");return;}
+  const {ticketId}=_pendAtualizacao;
+  const idx=tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){fecharModal("modalAtualizacao");return;}
+  // Log especial de atualização obrigatória
+  if(!tickets[idx].historico) tickets[idx].historico=[];
+  tickets[idx].historico.push({
+    acao: texto,
+    usuario: usuarioLogado.nome,
+    data: agora(),
+    tipo: "atualizacao48h"
+  });
+  tickets[idx].ultimaAtualizacao=agora();
+  salvar();
+  fecharModal("modalAtualizacao");
+  _pendAtualizacao={ticketId:null};
+  verTicket(ticketId);
+}
+
+/* ============================================================
+   REFRESH PARCIAL DA TELA
+   ============================================================ */
+function refreshTabelaSrv(idx){
+  const wrap=document.getElementById("tabelaSrvWrap");
+  if(wrap) wrap.innerHTML=renderTabelaServicosTicket(tickets[idx]);
+}
+
+function refreshHistorico(idx){
+  const el=document.getElementById("historicoLista");
+  if(el) el.innerHTML=renderHistorico(tickets[idx].historico||[]);
+}
+
+function renderHistorico(hist){
+  if(!hist.length) return '<p style="color:#aaa;font-size:12px;">Nenhum registro ainda.</p>';
+  return hist.slice().reverse().map(h=>{
+    const isAtualiz = h.tipo==="atualizacao48h";
+    const isPendCliente = (h.acao||"").includes("Pendência do Cliente");
+    return `
+      <div class="hist-row${isAtualiz?" atualiz":""}" ${isPendCliente?'style="background:#fce4ec;border-left:3px solid #e91e8c;padding-left:8px;"':""}>
+        <b>${escHtml(h.usuario)}</b>
+        ${isAtualiz?'<span style="background:#f6c23e;color:#000;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">UPDATE 48h</span>':""}
+        ${isPendCliente?'<span style="background:#e91e8c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">PEND. CLIENTE</span>':""}
+        — ${escHtml(h.acao)}
+        <span style="color:#888;float:right;font-size:11px;">${formatarData(h.data)}</span>
+      </div>`;
+  }).join("");
+}
+
+/* ============================================================
+   MODAL GERAL
+   ============================================================ */
+function fecharModal(id){
+  document.getElementById(id).style.display="none";
+}
+
+/* ============================================================
+   TRANSFERÊNCIA DE SETOR
+   ============================================================ */
+function abrirModalTransf(id){
+  _ticketTransfId=id;
+  const t=tickets.find(x=>x.id===id);
+  document.getElementById("modalTransfInfo").textContent =
+    `Ticket #${id} — "${t?.titulo||""}"  |  Setor atual: ${t?.setor||"?"}`;
+  document.getElementById("modalSetorDestino").innerHTML =
+    setores.filter(s=>s!==t?.setor).map(s=>`<option>${escHtml(s)}</option>`).join("");
+  document.getElementById("modalTransf").style.display="flex";
+}
+
+function confirmarTransferencia(){
+  if(!_ticketTransfId)return;
+  const destino=document.getElementById("modalSetorDestino").value;
+  if(!destino){alert("Selecione o setor.");return;}
+  const idx=tickets.findIndex(t=>t.id===_ticketTransfId);
+  if(idx<0){fecharModal("modalTransf");return;}
+  const anterior=tickets[idx].setor;
+  tickets[idx].setor=destino;
+  tickets[idx].responsavel="";
+  if((destino||"").toLowerCase().includes("credenci")){
+    tickets[idx].dataChegadaCredenciamento = agora();
+  }
+  _logHistorico(idx,`Ticket transferido: "${anterior}" → "${destino}"`);
+  tickets[idx].ultimaAtualizacao=agora();
+  salvar();
+  const tid=_ticketTransfId;
+  fecharModal("modalTransf");
+  _ticketTransfId=null;
+  verTicket(tid);
+}
+
+/* ============================================================
+   EDITAR / EXCLUIR / HISTÓRICO
+   ============================================================ */
+async function atualizarTicket(id){
+  const idx=tickets.findIndex(t=>t.id===id);
+  if(idx<0)return;
+  const statusAntigo=tickets[idx].status;
+  const novoStatus  =document.getElementById("vt_status").value;
+
+  // Se mudando para "Aguardando cliente", abre modal antes de salvar
+  if(novoStatus==="Aguardando cliente" && statusAntigo!=="Aguardando cliente"){
+    _pendAguardandoCliente = { ticketId:id, statusAnterior:statusAntigo };
+    abrirModalAguardandoCliente(id);
+    return;
+  }
+
+  // Se saindo de "Aguardando cliente", limpa pendência
+  if(statusAntigo==="Aguardando cliente" && novoStatus!=="Aguardando cliente"){
+    tickets[idx].pendenciaCliente     = "";
+    tickets[idx].pendenciaClienteResp = "";
+    tickets[idx].pendenciaClienteData = "";
+  }
+
+  tickets[idx].titulo     =document.getElementById("vt_titulo").value.trim();
+  tickets[idx].cliente    =document.getElementById("vt_cliente").value.trim();
+  tickets[idx].responsavel=document.getElementById("vt_responsavel").value;
+  tickets[idx].prioridade =document.getElementById("vt_prioridade").value;
+  tickets[idx].status     =novoStatus;
+  tickets[idx].descricao  =document.getElementById("vt_descricao").value.trim();
+  tickets[idx].obs        =document.getElementById("vt_obs").value.trim();
+  if(novoStatus!==statusAntigo){
+    _logHistorico(idx,`Status: "${statusAntigo}" → "${novoStatus}"`);
+  } else {
+    _logHistorico(idx,"Ticket atualizado");
+  }
+  tickets[idx].ultimaAtualizacao=agora();
+  await salvarTicket(tickets[idx]);
+  verTicket(id);
+}
+
+async function excluirTicket(id){
+  const idx = tickets.findIndex(x=>x.id===id);
+  if(idx<0)return;
+  const t = tickets[idx];
+  if(!confirm(`Excluir o ticket "${t.titulo}"? Ação irreversível.`))return;
+
+  // Se já existe no Firestore, exclui o documento
+  if(t._id){
+    await excluirTicketFirebase(t._id);
+  }
+
+  // Remove da memória e atualiza UI
+  tickets.splice(idx,1);
+  mostrarTickets();
+
+  // Mantém compatibilidade: garante que o estado fique sincronizado
+  // (caso existam tickets locais ainda sem _id)
+  salvar();
+}
+
+async function adicionarEvolucao(id){
+  const texto=document.getElementById("novaEvolucao").value.trim();
+  if(!texto){alert("Digite a evolução antes de registrar.");return;}
+  const idx=tickets.findIndex(t=>t.id===id);
+  if(idx<0)return;
+  _logHistorico(idx,texto);
+  tickets[idx].ultimaAtualizacao=agora();
+  await salvarTicket(tickets[idx]);
+  verTicket(id);
+}
+
+/* ============================================================
+   MODAL AGUARDANDO CLIENTE / PENDÊNCIA DO CLIENTE
+   ============================================================ */
+function abrirModalAguardandoCliente(id){
+  const t=tickets.find(x=>x.id===id);
+  document.getElementById("modalAguardandoClienteInfo").textContent =
+    `Ticket #${id} — "${t?.titulo||""}" | Cliente: ${t?.cliente||"?"}`;
+
+  const todosResp = responsaveis.length
+    ? responsaveis
+    : usuarios.map(u=>({nome:u.nome,setor:""}));
+  document.getElementById("modalAguardandoClienteResp").innerHTML =
+    '<option value="">-- Selecione o responsável --</option>' +
+    todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+
+  document.getElementById("modalAguardandoClienteTexto").value="";
+  document.getElementById("contadorAguardandoCliente").textContent="0";
+
+  // Adiciona listener de contagem de caracteres
+  const textarea = document.getElementById("modalAguardandoClienteTexto");
+  textarea.oninput = function(){
+    document.getElementById("contadorAguardandoCliente").textContent = this.value.length;
+  };
+
+  document.getElementById("modalAguardandoCliente").style.display="flex";
+}
+
+function cancelarAguardandoCliente(){
+  fecharModal("modalAguardandoCliente");
+  _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+}
+
+function confirmarAguardandoCliente(){
+  const {ticketId, statusAnterior} = _pendAguardandoCliente;
+  if(!ticketId){ fecharModal("modalAguardandoCliente"); return; }
+
+  const respVal = document.getElementById("modalAguardandoClienteResp").value.trim();
+  const responsavelNome = respVal.split(" (")[0];
+  if(!responsavelNome){
+    alert("Selecione o responsável.");
+    return;
+  }
+
+  const texto = document.getElementById("modalAguardandoClienteTexto").value.trim();
+  if(!texto){
+    alert("Informe o que o cliente precisa fazer.");
+    return;
+  }
+
+  const idx=tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalAguardandoCliente"); return; }
+
+  const agr = agora();
+
+  // Salva também os outros campos que poderiam ter sido editados
+  tickets[idx].titulo     =document.getElementById("vt_titulo")?.value.trim()||tickets[idx].titulo;
+  tickets[idx].cliente    =document.getElementById("vt_cliente")?.value.trim()||tickets[idx].cliente;
+  tickets[idx].responsavel=document.getElementById("vt_responsavel")?.value||tickets[idx].responsavel;
+  tickets[idx].prioridade =document.getElementById("vt_prioridade")?.value||tickets[idx].prioridade;
+  tickets[idx].descricao  =document.getElementById("vt_descricao")?.value.trim()||tickets[idx].descricao;
+  tickets[idx].obs        =document.getElementById("vt_obs")?.value.trim()||tickets[idx].obs;
+
+  // Muda o status
+  tickets[idx].status = "Aguardando cliente";
+
+  // Grava dados da pendência
+  tickets[idx].pendenciaCliente     = texto;
+  tickets[idx].pendenciaClienteResp = responsavelNome;
+  tickets[idx].pendenciaClienteData = agr;
+
+  // Log no histórico
+  _logHistorico(idx, `Status: "${statusAnterior||"?"}" → "Aguardando cliente" — Responsável: ${responsavelNome} — Pendência do Cliente: "${texto}"`);
+  tickets[idx].ultimaAtualizacao = agr;
+
+  salvar();
+  fecharModal("modalAguardandoCliente");
+  _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+  verTicket(ticketId);
+}
+
+/* ============================================================
+   UTILITÁRIOS
+   ============================================================ */
+function _logHistorico(idx,acao,tipo="sistema"){
+  if(!tickets[idx].historico) tickets[idx].historico=[];
+  tickets[idx].historico.push({acao,usuario:usuarioLogado.nome,data:agora(),tipo});
+}
+
+function gerarId(){ return Date.now().toString(36).toUpperCase(); }
+function agora(){   return new Date().toISOString(); }
+
+function formatarData(iso){
+  if(!iso)return "-";
+  return new Date(iso).toLocaleString("pt-BR");
+}
+
+function calcularSLARestante(ticket){
+  const srvs=ticket.servicosTicket||[];
+  let slaHoras=0;
+  const nomeSrv=srvs.length?srvs[0].nome:(ticket.servico||"");
+  if(nomeSrv){
+    const sc=servicosCadastro.find(s=>s.nome===nomeSrv);
+    slaHoras=sc?sc.sla:0;
+  }
+  if(!slaHoras)return null;
+  const abertura  =new Date(ticket.dataAbertura);
+  const decorrido =(new Date()-abertura)/3600000;
+  const restante  =slaHoras-decorrido;
+  return{horas:restante,atrasado:restante<0,porcentagem:Math.min(100,Math.round((decorrido/slaHoras)*100))};
+}
+
+function corStatus(s){
+  return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","Concluído":"#1cc88a","Cancelado":"#858796"}[s]||"#4e73df";
+}
+function corPrioridade(p){
+  return{"Baixa":"#1cc88a","Normal":"#4e73df","Alta":"#f6c23e","Urgente":"#e74a3b"}[p]||"#4e73df";
+}
+function escHtml(str){
+  return String(str).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+// Inicia carregando dados do Firebase e depois mostra o login
+carregarDadosFirebase().then(() => {
+  carregarLogin();
+}).catch(err => {
+  console.error("Falha ao inicializar:", err);
+  document.body.innerHTML = '<div style="text-align:center;padding:60px;font-family:sans-serif;">' +
+    '<h2>❌ Erro ao conectar com o banco de dados</h2>' +
+    '<p>Verifique sua conexão com a internet e as configurações do Firebase.</p>' +
+    '<p style="color:#999;">Detalhes no console (F12)</p></div>';
+});
+</script>
+</body>
+</html>
