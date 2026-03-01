@@ -671,18 +671,33 @@ function atualizarSeletorVisao(){
   const sel = document.getElementById("filtroVisao");
   if(usuarioLogado.perfil === "adm"){
     sel.innerHTML = '<option value="todos">Todos</option>' +
-      setores.map(s=>`<option>${escHtml(s)}</option>`).join("");
+      setores.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("");
+    sel.value = "todos";
     sel.disabled = false;
   } else {
     const setor = setorDoUsuario();
     sel.innerHTML = `<option value="${escHtml(setor)}">${escHtml(setor||"Sem setor")}</option>`;
+    sel.value = setor;
     sel.disabled = true;
+    // Atualiza info de setor na sidebar
+    const setorInfoEl = document.getElementById("setorInfo");
+    if(setorInfoEl){
+      setorInfoEl.innerHTML = setor
+        ? "Setor: <b>"+escHtml(setor)+"</b>"
+        : "<span style=\'color:#f6c23e;font-size:11px;\'>⚠ Nenhum setor atribuído ao seu usuário</span>";
+    }
   }
 }
 
-// Retorna o setor do usuário logado diretamente do seu cadastro
+// Retorna o setor do usuário logado.
+// Prioridade: campo setor do cadastro de usuário → fallback: busca no cadastro de responsáveis pelo nome.
 function setorDoUsuario(){
-  return usuarioLogado.setor || "";
+  if(usuarioLogado.setor && usuarioLogado.setor.trim() !== ""){
+    return usuarioLogado.setor.trim();
+  }
+  // Fallback: procura o nome do usuário na lista de responsáveis
+  const r = responsaveis.find(r => (r.nome||"").toLowerCase() === (usuarioLogado.nome||"").toLowerCase());
+  return r ? r.setor : "";
 }
 
 function ticketsVisiveis(){
