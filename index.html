@@ -111,6 +111,28 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .hist-row{border-bottom:1px solid #d0d9f0;padding:9px 0;font-size:13px;overflow:hidden;}
 .hist-row.atualiz{background:#fffbea;border-left:3px solid #f6c23e;padding-left:8px;}
 
+
+/* ============================================================
+   DASHBOARD
+   ============================================================ */
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+.dash-card{background:white;border-radius:12px;padding:18px;box-shadow:0 3px 10px rgba(0,0,0,0.07);border-top:4px solid #4e73df;}
+.dash-card h4{margin:0 0 4px 0;font-size:14px;color:#1f2937;}
+.dash-card p{margin:0 0 14px 0;font-size:11px;color:#888;}
+.dash-card canvas{max-height:260px;}
+.dash-stat{display:flex;gap:14px;flex-wrap:wrap;margin-bottom:18px;}
+.dash-stat-card{flex:1;min-width:140px;border-radius:10px;padding:16px 18px;color:white;text-align:center;}
+.dash-stat-num{font-size:32px;font-weight:800;line-height:1;}
+.dash-stat-lbl{font-size:12px;opacity:.9;margin-top:4px;}
+.dash-filter-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;background:white;padding:12px 16px;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
+.dash-filter-row label{font-size:12px;font-weight:600;color:#374151;white-space:nowrap;}
+.dash-filter-row select,.dash-filter-row input{margin:0;width:auto;flex:1;min-width:130px;max-width:220px;}
+@media(max-width:768px){
+  .dash-grid{grid-template-columns:1fr!important;}
+  .dash-stat-card{min-width:120px;}
+  .dash-filter-row select,.dash-filter-row input{max-width:100%;}
+}
+
 /* PERFIL BADGE */
 .perfil-badge-adm{background:#4e73df;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
 .perfil-badge-auxiliar{background:#6c757d;color:white;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;}
@@ -214,6 +236,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <h2 style="margin-top:0;">CRM</h2>
     <button class="btn-primary" onclick="mostrarTickets();closeSidebar()">🎫 Tickets</button>
     <button class="btn-success" id="btnCadastros" onclick="mostrarCadastros();closeSidebar()">📋 CADASTROS</button>
+    <button class="btn-info" id="btnDashboard" onclick="mostrarDashboard();closeSidebar()" style="background:#6f42c1;">📊 DASHBOARDS</button>
     <label style="font-size:12px;opacity:.7;margin-top:4px;">Visão:</label>
     <select id="filtroVisao" onchange="mostrarTickets()"></select>
     <hr style="border-color:#374151;margin:12px 0;">
@@ -412,6 +435,9 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <button class="btn-dark" onclick="fecharModal('modalBackup')" style="width:100%;">Fechar</button>
   </div>
 </div>
+
+<!-- Chart.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -706,6 +732,8 @@ function login(){
     usuarioLogado.perfil === "adm" ? "block" : "none";
   document.getElementById("btnBackup").style.display =
     usuarioLogado.perfil === "adm" ? "block" : "none";
+  // Dashboard visível para todos
+  document.getElementById("btnDashboard").style.display = "block";
 
   atualizarSeletorVisao();
   mostrarTickets();
@@ -2397,6 +2425,409 @@ async function confirmarRestaurar(){
   } finally {
     if(btnConf){ btnConf.disabled=false; btnConf.textContent="⚠️ Confirmar Restauração"; }
     _dadosRestaurar = null;
+  }
+}
+
+
+/* ============================================================
+   DASHBOARD — GRÁFICOS E MÉTRICAS
+   ============================================================ */
+let _charts = {}; // armazena instâncias Chart.js para destruir antes de recriar
+
+function _destroyChart(id){
+  if(_charts[id]){ _charts[id].destroy(); delete _charts[id]; }
+}
+
+/* ── Helpers de cálculo ── */
+
+// Retorna horas entre duas ISO strings (ou null se inválido)
+function _difHoras(inicio, fim){
+  if(!inicio || !fim) return null;
+  const d = (new Date(fim) - new Date(inicio)) / 3600000;
+  return d >= 0 ? d : null;
+}
+
+// Para cada serviço de um ticket, calcula horas até ser iniciado
+// (da abertura do ticket / chegada ao credenciamento até iniciado.data)
+function _horasParaIniciarServico(ticket, srv){
+  if(!srv.iniciado?.marcado || !srv.iniciado.data) return null;
+  const ref = ticket.dataChegadaCredenciamento || ticket.dataAbertura;
+  return _difHoras(ref, srv.iniciado.data);
+}
+
+// Horas totais de pendência do cliente de um ticket
+function _horasPendenciaCliente(ticket){
+  if(!ticket.pendenciaClienteData) return 0;
+  // Considera pendência ainda aberta se status ainda for "Aguardando cliente"
+  const fim = ticket.status === "Aguardando cliente"
+    ? new Date().toISOString()
+    : (ticket.ultimaAtualizacao || new Date().toISOString());
+  return _difHoras(ticket.pendenciaClienteData, fim) || 0;
+}
+
+// SLA do ticket (primeiro serviço)
+function _slaTicket(ticket){
+  const srvs = ticket.servicosTicket || [];
+  const nome = srvs.length ? srvs[0].nome : (ticket.servico || "");
+  if(!nome) return null;
+  const sc = servicosCadastro.find(s => s.nome === nome);
+  return sc ? sc.sla : null;
+}
+
+// Verifica se ticket foi entregue dentro do SLA
+function _entregueNoPrazo(ticket){
+  if(ticket.status !== "Concluído") return null; // não concluído = não avaliável
+  const sla = _slaTicket(ticket);
+  if(!sla) return null;
+  const abertura = new Date(ticket.dataAbertura);
+  const conclusao = new Date(ticket.dataConclusao || ticket.ultimaAtualizacao);
+  const horas = (conclusao - abertura) / 3600000;
+  return horas <= sla;
+}
+
+// Horas em atraso de um ticket concluído ou em aberto
+function _horasAtrasoTicket(ticket){
+  const sla = _slaTicket(ticket);
+  if(!sla) return 0;
+  const abertura  = new Date(ticket.dataAbertura);
+  const fim       = ticket.status === "Concluído"
+    ? new Date(ticket.dataConclusao || ticket.ultimaAtualizacao)
+    : new Date();
+  const decorrido = (fim - abertura) / 3600000;
+  return Math.max(0, decorrido - sla);
+}
+
+// Horas em atraso de um serviço específico de um ticket
+function _horasAtrasoServico(ticket, srv){
+  if(!srv.iniciado?.marcado) return 0;
+  const sc = servicosCadastro.find(s => s.nome === srv.nome);
+  if(!sc || !sc.sla) return 0;
+  const ref    = ticket.dataChegadaCredenciamento || ticket.dataAbertura;
+  const inicio = new Date(ref);
+  const fim    = srv.finalizado?.marcado
+    ? new Date(srv.finalizado.data)
+    : new Date();
+  const decorrido = (fim - inicio) / 3600000;
+  return Math.max(0, decorrido - sc.sla);
+}
+
+/* ── Paleta de cores ── */
+const PALETA = [
+  "#4e73df","#1cc88a","#36b9cc","#fd7e14","#e74a3b","#f6c23e",
+  "#6f42c1","#e91e8c","#20c9a6","#858796","#2d6a4f","#c0392b"
+];
+
+/* ── Renderiza o Dashboard ── */
+function mostrarDashboard(){
+  document.getElementById("conteudo").innerHTML = `
+    <div style="max-width:1100px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
+        <h2 style="margin:0;">📊 Dashboards</h2>
+        <button class="btn-dark" onclick="atualizarDashboard()" style="padding:7px 16px;">🔄 Atualizar</button>
+      </div>
+
+      <!-- Filtros globais -->
+      <div class="dash-filter-row">
+        <label>Período:</label>
+        <select id="dash_periodo" onchange="atualizarDashboard()">
+          <option value="todos">Todo período</option>
+          <option value="7">Últimos 7 dias</option>
+          <option value="30">Últimos 30 dias</option>
+          <option value="90">Últimos 90 dias</option>
+          <option value="365">Último ano</option>
+        </select>
+        <label>Setor:</label>
+        <select id="dash_setor" onchange="atualizarDashboard()">
+          <option value="">Todos os setores</option>
+          ${setores.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("")}
+        </select>
+        <label>Serviço (filtro atraso):</label>
+        <select id="dash_servico_filtro" onchange="atualizarDashboard()">
+          <option value="">Todos os serviços</option>
+          ${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)}</option>`).join("")}
+        </select>
+      </div>
+
+      <!-- KPIs / Cards estatísticos -->
+      <div class="dash-stat" id="dash_kpis"></div>
+
+      <!-- Grid de gráficos -->
+      <div class="dash-grid">
+        <div class="dash-card">
+          <h4>⏱ Horas médias para ativação de serviços</h4>
+          <p>Tempo médio entre abertura do ticket e início de cada serviço</p>
+          <canvas id="chartAtivacao"></canvas>
+        </div>
+        <div class="dash-card">
+          <h4>🔴 Serviços com mais atrasos (ocorrências)</h4>
+          <p>Quais serviços mais vezes ficaram fora do prazo SLA</p>
+          <canvas id="chartServicosAtraso"></canvas>
+        </div>
+        <div class="dash-card" style="grid-column:1/-1;">
+          <h4>👤 Responsável × Horas em atraso</h4>
+          <p>Total de horas em atraso (tickets + serviços) por responsável — use o filtro de serviço acima para refinar</p>
+          <canvas id="chartRespAtraso"></canvas>
+        </div>
+        <div class="dash-card">
+          <h4>✅ Tickets no prazo vs fora do prazo (SLA)</h4>
+          <p>Proporção de tickets concluídos dentro e fora do SLA</p>
+          <canvas id="chartSLA"></canvas>
+        </div>
+        <div class="dash-card">
+          <h4>⏳ Horas de pendência por cliente</h4>
+          <p>Total de horas que cada ticket ficou aguardando o cliente</p>
+          <canvas id="chartPendCliente"></canvas>
+        </div>
+      </div>
+    </div>`;
+
+  atualizarDashboard();
+}
+
+function _ticketsFiltrados(){
+  const periodo  = parseInt(document.getElementById("dash_periodo")?.value) || 0;
+  const setor    = document.getElementById("dash_setor")?.value || "";
+  const corte    = periodo ? new Date(Date.now() - periodo * 86400000) : null;
+
+  // Respeita visão do usuário logado
+  let base = ticketsVisiveis();
+
+  if(setor)  base = base.filter(t => t.setor === setor);
+  if(corte)  base = base.filter(t => new Date(t.dataAbertura) >= corte);
+  return base;
+}
+
+function atualizarDashboard(){
+  const lista    = _ticketsFiltrados();
+  const srvFiltro= document.getElementById("dash_servico_filtro")?.value || "";
+
+  /* ── KPIs ── */
+  const concluidos   = lista.filter(t => t.status === "Concluído");
+  const noPrazo      = concluidos.filter(t => _entregueNoPrazo(t) === true).length;
+  const foraPrazo    = concluidos.filter(t => _entregueNoPrazo(t) === false).length;
+  const emAberto     = lista.filter(t => t.status !== "Concluído" && t.status !== "Cancelado").length;
+  const totalHrsPend = lista.reduce((acc,t) => acc + _horasPendenciaCliente(t), 0);
+  const atrasadosAtivos = lista.filter(t => {
+    if(t.status==="Concluído"||t.status==="Cancelado") return false;
+    const sla = _slaTicket(t); if(!sla) return false;
+    return (new Date()-new Date(t.dataAbertura))/3600000 > sla;
+  }).length;
+
+  document.getElementById("dash_kpis").innerHTML = `
+    <div class="dash-stat-card" style="background:#4e73df;">
+      <div class="dash-stat-num">${lista.length}</div>
+      <div class="dash-stat-lbl">Total de Tickets</div>
+    </div>
+    <div class="dash-stat-card" style="background:#1cc88a;">
+      <div class="dash-stat-num">${noPrazo}</div>
+      <div class="dash-stat-lbl">Entregues no Prazo</div>
+    </div>
+    <div class="dash-stat-card" style="background:#e74a3b;">
+      <div class="dash-stat-num">${foraPrazo}</div>
+      <div class="dash-stat-lbl">Entregues fora do Prazo</div>
+    </div>
+    <div class="dash-stat-card" style="background:#f6c23e;color:#000;">
+      <div class="dash-stat-num">${emAberto}</div>
+      <div class="dash-stat-lbl">Em Aberto</div>
+    </div>
+    <div class="dash-stat-card" style="background:#c0392b;">
+      <div class="dash-stat-num">${atrasadosAtivos}</div>
+      <div class="dash-stat-lbl">Ativos em Atraso</div>
+    </div>
+    <div class="dash-stat-card" style="background:#e91e8c;">
+      <div class="dash-stat-num">${totalHrsPend.toFixed(0)}h</div>
+      <div class="dash-stat-lbl">Total Pend. Clientes</div>
+    </div>`;
+
+  /* ── 1. Horas médias para ativação por serviço ── */
+  _destroyChart("chartAtivacao");
+  const ativMap = {}; // nome → [horas]
+  lista.forEach(t => {
+    (t.servicosTicket||[]).forEach(srv => {
+      const h = _horasParaIniciarServico(t, srv);
+      if(h !== null){
+        if(!ativMap[srv.nome]) ativMap[srv.nome] = [];
+        ativMap[srv.nome].push(h);
+      }
+    });
+  });
+  const ativLabels = Object.keys(ativMap);
+  const ativData   = ativLabels.map(k => {
+    const arr = ativMap[k];
+    return +(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1);
+  });
+  // Ordena pelo maior tempo
+  const ativSorted = ativLabels.map((l,i)=>({l,v:ativData[i]})).sort((a,b)=>b.v-a.v);
+  const el1 = document.getElementById("chartAtivacao");
+  if(el1){
+    _charts["chartAtivacao"] = new Chart(el1, {
+      type: "bar",
+      data: {
+        labels: ativSorted.map(x=>x.l),
+        datasets:[{
+          label:"Horas médias para ativar",
+          data: ativSorted.map(x=>x.v),
+          backgroundColor: PALETA,
+          borderRadius: 6
+        }]
+      },
+      options:{
+        responsive:true, indexAxis:"y",
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x.toFixed(1)}h`}}},
+        scales:{x:{beginAtZero:true,ticks:{callback:v=>v+"h"}}}
+      }
+    });
+  }
+
+  /* ── 2. Serviços com mais atrasos ── */
+  _destroyChart("chartServicosAtraso");
+  const atrasoSrvMap = {}; // nome → contagem de ocorrências em atraso
+  lista.forEach(t => {
+    (t.servicosTicket||[]).forEach(srv => {
+      const hAtras = _horasAtrasoServico(t, srv);
+      if(hAtras > 0){
+        atrasoSrvMap[srv.nome] = (atrasoSrvMap[srv.nome]||0) + 1;
+      }
+    });
+  });
+  const asSorted = Object.entries(atrasoSrvMap).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const el2 = document.getElementById("chartServicosAtraso");
+  if(el2){
+    _charts["chartServicosAtraso"] = new Chart(el2, {
+      type:"bar",
+      data:{
+        labels: asSorted.map(x=>x[0]),
+        datasets:[{
+          label:"Ocorrências em atraso",
+          data: asSorted.map(x=>x[1]),
+          backgroundColor:"#e74a3b",
+          borderRadius:6
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{legend:{display:false}},
+        scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}
+      }
+    });
+  }
+
+  /* ── 3. Responsável × Horas em atraso ── */
+  _destroyChart("chartRespAtraso");
+  const respAtrasoMap = {}; // nome → horas
+
+  lista.forEach(t => {
+    // Atraso do ticket (responsável do ticket)
+    if(t.responsavel){
+      const hT = _horasAtrasoTicket(t);
+      if(hT > 0 && (!srvFiltro)){
+        respAtrasoMap[t.responsavel] = (respAtrasoMap[t.responsavel]||0) + hT;
+      }
+    }
+    // Atraso por serviço
+    (t.servicosTicket||[]).forEach(srv => {
+      if(srvFiltro && srv.nome !== srvFiltro) return;
+      const resp = srv.iniciado?.responsavel || srv.iniciado?.usuario || t.responsavel;
+      if(!resp) return;
+      const hS = _horasAtrasoServico(t, srv);
+      if(hS > 0){
+        respAtrasoMap[resp] = (respAtrasoMap[resp]||0) + hS;
+      }
+    });
+  });
+
+  const respSorted = Object.entries(respAtrasoMap)
+    .sort((a,b)=>b[1]-a[1]).slice(0,12);
+  const el3 = document.getElementById("chartRespAtraso");
+  if(el3){
+    _charts["chartRespAtraso"] = new Chart(el3, {
+      type:"bar",
+      data:{
+        labels: respSorted.map(x=>x[0]),
+        datasets:[{
+          label:"Horas em atraso",
+          data: respSorted.map(x=>+x[1].toFixed(1)),
+          backgroundColor: respSorted.map((_,i)=>PALETA[i%PALETA.length]),
+          borderRadius:6
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{
+          legend:{display:false},
+          tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y.toFixed(1)}h`}}
+        },
+        scales:{y:{beginAtZero:true,ticks:{callback:v=>v+"h"}}}
+      }
+    });
+  }
+
+  /* ── 4 & 5. SLA: no prazo vs fora do prazo ── */
+  _destroyChart("chartSLA");
+  const el4 = document.getElementById("chartSLA");
+  if(el4){
+    const semSla = concluidos.filter(t=>_entregueNoPrazo(t)===null).length;
+    _charts["chartSLA"] = new Chart(el4, {
+      type:"doughnut",
+      data:{
+        labels:["✅ No Prazo","❌ Fora do Prazo","— Sem SLA definido"],
+        datasets:[{
+          data:[noPrazo, foraPrazo, semSla],
+          backgroundColor:["#1cc88a","#e74a3b","#adb5bd"],
+          borderWidth:2, borderColor:"white"
+        }]
+      },
+      options:{
+        responsive:true,
+        plugins:{
+          legend:{position:"bottom",labels:{font:{size:12}}},
+          tooltip:{callbacks:{label:ctx=>{
+            const tot = ctx.dataset.data.reduce((a,b)=>a+b,0);
+            const pct = tot>0?((ctx.parsed/tot)*100).toFixed(1):0;
+            return `${ctx.label}: ${ctx.parsed} (${pct}%)`;
+          }}}
+        }
+      }
+    });
+  }
+
+  /* ── 6. Horas de pendência por cliente (top 15 tickets) ── */
+  _destroyChart("chartPendCliente");
+  const pendList = lista
+    .map(t => ({
+      label: `#${t.id} ${(t.cliente||"").slice(0,20)}`,
+      horas: _horasPendenciaCliente(t)
+    }))
+    .filter(x => x.horas > 0)
+    .sort((a,b) => b.horas - a.horas)
+    .slice(0, 15);
+
+  const el5 = document.getElementById("chartPendCliente");
+  if(el5){
+    if(pendList.length === 0){
+      el5.parentElement.innerHTML += '<p style="color:#aaa;text-align:center;font-size:13px;margin-top:8px;">Nenhum ticket com pendência de cliente no período.</p>';
+    } else {
+      _charts["chartPendCliente"] = new Chart(el5, {
+        type:"bar",
+        data:{
+          labels: pendList.map(x=>x.label),
+          datasets:[{
+            label:"Horas em pendência",
+            data: pendList.map(x=>+x.horas.toFixed(1)),
+            backgroundColor:"#e91e8c",
+            borderRadius:6
+          }]
+        },
+        options:{
+          responsive:true, indexAxis:"y",
+          plugins:{
+            legend:{display:false},
+            tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x.toFixed(1)}h`}}
+          },
+          scales:{x:{beginAtZero:true,ticks:{callback:v=>v+"h"}}}
+        }
+      });
+    }
   }
 }
 
