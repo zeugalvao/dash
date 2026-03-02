@@ -851,6 +851,21 @@ function horasNoCredenciamento(t){
 }
 
 
+// --- SLA Comercial (24h para devolver ao Credenciamento) ---
+function horasDesdeTransferenciaComercial(t){
+  const ref = t.dataTransferenciaComercial;
+  if(!ref) return 0;
+  return (new Date() - new Date(ref)) / 3600000;
+}
+function precisaRetornoComercial24h(t){
+  if(t.status === "Concluído" || t.status === "Cancelado") return false;
+  const noComercial = (t.setor||"").toLowerCase().includes("comercial");
+  if(!noComercial) return false;
+  if(!t.dataTransferenciaComercial) return false;
+  return horasDesdeTransferenciaComercial(t) >= 24;
+}
+
+
 /* ============================================================
    CADASTROS — apenas para ADM
    ============================================================ */
@@ -1092,7 +1107,8 @@ function mostrarTickets(){
   const atrasados     = lista.filter(t=>{
     if(t.status==="Concluído"||t.status==="Cancelado") return false;
     const s = calcularSLARestante(t); return s&&s.atrasado;
-  }).length;
+  }).length
+  const comercial24h  = lista.filter(t=>precisaRetornoComercial24h(t)).length;;
   const pendentes48   = lista.filter(t=>precisaAtualizacao48h(t)).length;
   const semIniciar24  = lista.filter(t=>precisaIniciarCredenciamento(t)).length;
   const qtdEmAberto   = lista.filter(t=>estaEmAberto(t)).length;
@@ -1122,10 +1138,14 @@ function mostrarTickets(){
         <div class="resumo-label">Pend. Cliente</div>
       </div>
     </div>
-    <div class="resumo-grid" style="grid-template-columns:repeat(3,1fr);">
+    <div class="resumo-grid" style="grid-template-columns:repeat(4,1fr);">
       <div class="resumo-card" style="background:#e74a3b;cursor:pointer;" onclick="filtroRapido('atrasados_sla')">
         <div class="resumo-num">${atrasados}</div>
         <div class="resumo-label">Atrasados SLA</div>
+      </div>
+      <div class="resumo-card" style="background:#b91c1c;cursor:pointer;" onclick="filtroRapido('comercial_24h')">
+        <div class="resumo-num">${comercial24h}</div>
+        <div class="resumo-label">Comercial 24h s/ devolver</div>
       </div>
       <div class="resumo-card" style="background:#c0392b;cursor:pointer;" onclick="filtroRapido('sem_iniciar_24')">
         <div class="resumo-num">${semIniciar24}</div>
@@ -1147,6 +1167,9 @@ function mostrarTickets(){
             <option>Aberto</option>
             <option>Em andamento</option>
             <option>Aguardando cliente</option>
+            <option>REENVIAR DOCUMENTO</option>
+            <option>COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE</option>
+            <option>CLIENTE CIENTE DA PENDENCIA</option>
             <option>Concluído</option>
             <option>Cancelado</option>
           </select>
@@ -1157,6 +1180,7 @@ function mostrarTickets(){
             <option value="lib_parcial">🟠 Liberado Parcialmente</option>
             <option value="pend_cliente">💗 Pendência do Cliente</option>
             <option value="atrasados_sla">🔴 Atrasados (SLA)</option>
+            <option value="comercial_24h">🔴 Comercial 24h s/ devolver</option>
             <option value="sem_iniciar_24">🔴 Cred. 24h s/ iniciar</option>
             <option value="alerta_48">🟡 Aguard. atualização (48h)</option>
             <option value="iniciados">🔵 Em andamento (Cred.)</option>
@@ -1173,6 +1197,7 @@ function mostrarTickets(){
           <button class="btn-orange"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('lib_parcial')">🟠 Parcial</button>
           <button class="btn-pink"     style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('pend_cliente')">💗 Cliente</button>
           <button class="btn-danger"   style="font-size:11px;padding:3px 8px;" onclick="filtroRapido('atrasados_sla')">🔴 Atrasados</button>
+          <button class="btn-danger"   style="font-size:11px;padding:3px 8px;background:#b91c1c;" onclick="filtroRapido('comercial_24h')">🔴 Comercial 24h</button>
           <button class="btn-warning"  style="font-size:11px;padding:3px 8px;color:#000;" onclick="filtroRapido('alerta_48')">🟡 48h</button>
           <button style="background:#1cc88a;font-size:11px;padding:3px 8px;border:none;border-radius:6px;cursor:pointer;color:white;" onclick="filtroRapido('concluidos')">✅</button>
         </div>
@@ -1201,6 +1226,8 @@ function filtrarTickets(){
       if(t.status==="Concluído"||t.status==="Cancelado") return false;
       const s = calcularSLARestante(t); return s && s.atrasado;
     });
+  } else if(alerta === "comercial_24h"){
+    lista = lista.filter(t => precisaRetornoComercial24h(t));
   } else if(alerta === "sem_iniciar_24"){
     lista = lista.filter(t => precisaIniciarCredenciamento(t));
   } else if(alerta === "alerta_48"){
@@ -1247,6 +1274,7 @@ function renderListaTickets(lista){
 
   return lista.map(t=>{
     const sla          = calcularSLARestante(t);
+    const atrasoComercial= precisaRetornoComercial24h(t);
     const atrasado     = sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
     const iniciado     = temServicoIniciado(t);
     const alerta48     = precisaAtualizacao48h(t);
@@ -1256,7 +1284,7 @@ function renderListaTickets(lista){
     const pendCliente  = estaPendenciaCliente(t);
 
     let bordaColor, bgColor;
-    if(atrasado){
+    if(atrasoComercial || atrasado){
       bordaColor="#e74a3b"; bgColor="#fff8f8";
     } else if(semIniciar){
       bordaColor="#c0392b"; bgColor="#fdf0f0";
@@ -1286,7 +1314,10 @@ function renderListaTickets(lista){
       :"";
 
     let estadoBadge = "";
-    if(semIniciar){
+    if(atrasoComercial){
+      const hCom = Math.round(horasDesdeTransferenciaComercial(t));
+      estadoBadge = `<span class="badge" style="background:#e74a3b;color:white;margin-left:4px;">🔴 ${hCom}h no COMERCIAL</span>`;
+    } else if(semIniciar){
       const hCred = Math.round(horasNoCredenciamento(t));
       estadoBadge = `<span class="badge" style="background:#c0392b;color:white;margin-left:4px;">🔴 ${hCred}h sem INICIAR</span>`;
     } else if(alerta48){
@@ -1375,7 +1406,7 @@ function novoTicket(){
         <div>
           <label><b>Status Inicial</b></label>
           <select id="nt_status">
-            <option>Aberto</option><option>Em andamento</option>
+            <option>Aberto</option><option>Em andamento</option><option>Aguardando cliente</option><option>REENVIAR DOCUMENTO</option><option>COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE</option><option>CLIENTE CIENTE DA PENDENCIA</option>
           </select>
         </div>
         <div>
@@ -1471,6 +1502,7 @@ async function salvarNovoTicket(){
     dataAbertura:agr,
     ultimaAtualizacao:agr,
     dataChegadaCredenciamento:(setor||'').toLowerCase().includes('credenci') ? agr : null,
+    dataTransferenciaComercial:(setor||'').toLowerCase().includes('comercial') ? agr : null,
     servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),
     historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]
   };
@@ -1490,6 +1522,7 @@ function verTicket(id){
 
   const isAdm       = usuarioLogado.perfil === "adm";
   const sla         =calcularSLARestante(t);
+  const atrasoComercial = precisaRetornoComercial24h(t);
   const atrasado    =sla&&sla.atrasado&&t.status!=="Concluído"&&t.status!=="Cancelado";
   const iniciado    =temServicoIniciado(t);
   const alerta48    =precisaAtualizacao48h(t);
@@ -1499,7 +1532,8 @@ function verTicket(id){
   const pendCliente =estaPendenciaCliente(t);
 
   let bordaColor;
-  if(atrasado)         bordaColor="#e74a3b";
+  if(atrasoComercial)  bordaColor="#e74a3b";
+  else if(atrasado)         bordaColor="#e74a3b";
   else if(semIniciar)  bordaColor="#c0392b";
   else if(alerta48)    bordaColor="#f6c23e";
   else if(pendCliente) bordaColor="#e91e8c";
@@ -1520,6 +1554,7 @@ function verTicket(id){
         <h2 style="margin:0;">Ticket #${t.id}</h2>
         <span class="badge" style="background:${corStatus(t.status)};color:white;">${t.status}</span>
         <span class="badge" style="background:${corPrioridade(t.prioridade)};color:${t.prioridade==="Alta"?"#000":"white"};">${t.prioridade}</span>
+        ${atrasoComercial?(()=>{const hCom=Math.round(horasDesdeTransferenciaComercial(t));return `<span class="badge" style="background:#e74a3b;color:white;">🔴 ${hCom}h no COMERCIAL</span>`;})():""}
         ${atrasado?'<span class="badge" style="background:#e74a3b;color:white;">⚠ ATRASADO SLA</span>':""}
         ${semIniciar?`<span class="badge" style="background:#c0392b;color:white;">🔴 ${hNoCred}h sem INICIAR</span>`:""}
         ${alerta48&&!semIniciar?`<span class="alerta-48h">⏰ Atualizar (${Math.round(hDesde)}h)</span>`:""}
@@ -1533,6 +1568,16 @@ function verTicket(id){
         &bull; Última atualização: <b>${formatarData(t.ultimaAtualizacao)}</b>
         ${t.dataChegadaCredenciamento?`&bull; Chegou ao Cred.: <b>${formatarData(t.dataChegadaCredenciamento)}</b>`:""}
       </div>
+
+
+      ${atrasoComercial?(()=>{
+        const hCom = Math.round(horasDesdeTransferenciaComercial(t));
+        return `
+      <div style="background:#fff8f8;border:1px solid #e74a3b;border-radius:8px;padding:12px;margin-bottom:14px;">
+        <b style="color:#e74a3b;">🔴 Atenção! ${hCom}h no Comercial sem devolver ao Credenciamento!</b><br>
+        <span style="font-size:12px;color:#7b241c;">Regra SLA Comercial: após transferir para o Comercial, ele deve devolver em até 24h. Se passar, o ticket fica marcado como atrasado.</span>
+      </div>`;
+      })():""}
 
       ${semIniciar?`
       <div style="background:#fdf0f0;border:1px solid #c0392b;border-radius:8px;padding:12px;margin-bottom:14px;">
@@ -1589,7 +1634,7 @@ function verTicket(id){
         <div>
           <label><b>Status</b></label>
           <select id="vt_status">
-            ${["Aberto","Em andamento","Aguardando cliente","Concluído","Cancelado"].map(s=>
+            ${["Aberto","Em andamento","Aguardando cliente","REENVIAR DOCUMENTO","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE","CLIENTE CIENTE DA PENDENCIA","Concluído","Cancelado"].map(s=>
               `<option ${s===t.status?"selected":""}>${s}</option>`).join("")}
           </select>
         </div>
@@ -2081,8 +2126,16 @@ function confirmarTransferencia(){
   const idx=tickets.findIndex(t=>t.id===_ticketTransfId);
   if(idx<0){fecharModal("modalTransf");return;}
   const anterior=tickets[idx].setor;
+  const anteriorEraComercial = (anterior||"").toLowerCase().includes("comercial");
   tickets[idx].setor=destino;
   tickets[idx].responsavel="";
+  // Regra SLA Comercial: toda entrada no Comercial inicia contagem de 24h
+  if((destino||"").toLowerCase().includes("comercial")){
+    tickets[idx].dataTransferenciaComercial = agora();
+  } else if(anteriorEraComercial){
+    // Ao sair do Comercial, encerra a contagem (se voltar ao Comercial, reinicia)
+    tickets[idx].dataTransferenciaComercial = null;
+  }
   if((destino||"").toLowerCase().includes("credenci")){
     tickets[idx].dataChegadaCredenciamento = agora();
   }
@@ -2190,7 +2243,7 @@ function calcularSLARestante(ticket){
   return{horas:restante,atrasado:restante<0,porcentagem:Math.min(100,Math.round((decorrido/slaHoras)*100))};
 }
 function corStatus(s){
-  return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","Concluído":"#1cc88a","Cancelado":"#858796"}[s]||"#4e73df";
+  return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","REENVIAR DOCUMENTO":"#fd7e14","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE":"#6f42c1","CLIENTE CIENTE DA PENDENCIA":"#36b9cc","Concluído":"#1cc88a","Cancelado":"#858796"}[s]||"#4e73df";
 }
 function corPrioridade(p){
   return{"Baixa":"#1cc88a","Normal":"#4e73df","Alta":"#f6c23e","Urgente":"#e74a3b"}[p]||"#4e73df";
