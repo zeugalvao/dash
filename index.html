@@ -89,6 +89,8 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .ticket-card{border:1px solid #e3e6f0;border-radius:8px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .15s;}
 .ticket-card:hover{box-shadow:0 2px 12px rgba(0,0,0,0.12);}
 
+.tag-eligivel{background:#e74a3b;color:#fff;font-weight:800;padding:8px 10px;border-radius:8px;display:block;margin-top:8px;text-align:center;}
+
 /* ALERTA 48H */
 .alerta-48h{
   display:inline-flex;align-items:center;gap:5px;
@@ -378,7 +380,34 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
       <button class="btn-pink" onclick="confirmarAguardandoCliente()">✔ Confirmar Pendência</button>
       <button class="btn-dark" onclick="cancelarAguardandoCliente()">Cancelar</button>
     </div>
+  
+
+<!-- ============================================================
+     MODAL: ENCERRAR TICKET
+     ============================================================ -->
+<div id="modalEncerrarTicket" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:560px;">
+    <h3>✅ Encerrar Ticket</h3>
+    <p style="font-size:13px;color:#555;margin-top:-6px;">Preencha os dados para encerrar o ticket. Isso ficará registrado no log.</p>
+
+    <label style="display:block;margin-top:10px;"><b>Responsável pelo encerramento *</b></label>
+    <input id="modalEncerrarResp" placeholder="Nome do responsável" style="margin:6px 0 10px;">
+
+    <label style="display:block;"><b>Motivo *</b> <span style="font-size:11px;color:#888;">(máx. 600 caracteres)</span></label>
+    <textarea id="modalEncerrarMotivo" rows="4" maxlength="600"
+      style="margin:6px 0 4px;resize:vertical;"
+      placeholder="Descreva o motivo do encerramento..."></textarea>
+    <div style="text-align:right;font-size:11px;color:#888;margin-bottom:12px;">
+      <span id="contadorEncerrarMotivo">0</span>/600 caracteres
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-success" onclick="confirmarEncerramento()">✔ Confirmar Encerramento</button>
+      <button class="btn-dark" onclick="cancelarEncerramento()">Cancelar</button>
+    </div>
   </div>
+</div>
+</div>
 </div>
 
 
@@ -516,6 +545,7 @@ async function carregarDadosFirebase() {
     // 5) Tickets
     const tktSnap = await db.collection("tickets").get();
     tickets = tktSnap.docs.map(doc => ({ _id: doc.id, ...doc.data() }));
+    padronizarIdsTickets();
 
     _dadosCarregados = true;
     console.log("✅ Dados carregados do Firebase!");
@@ -813,25 +843,25 @@ function horasDesdeUltimaAtualizacao(t){
   return (new Date() - new Date(ref)) / 3600000;
 }
 function precisaAtualizacao48h(t){
-  if(t.status === "Concluído" || t.status === "Cancelado") return false;
+  if(t.status === "Concluído" || t.status === "Encerrado" || t.status === "Cancelado") return false;
   if(!temServicoIniciado(t)) return false;
   return horasDesdeUltimaAtualizacao(t) >= 48;
 }
 function estaEmAberto(t){
-  if(t.status==="Concluído"||t.status==="Cancelado") return false;
+  if(t.status==="Concluído"||t.status==="Encerrado"||t.status==="Cancelado") return false;
   const srvs = t.servicosTicket||[];
   if(!srvs.length) return false;
   return srvs.some(s=>s.iniciado?.marcado) && !srvs.some(s=>s.finalizado?.marcado);
 }
 function estaLiberadoParcialmente(t){
-  if(t.status==="Concluído"||t.status==="Cancelado") return false;
+  if(t.status==="Concluído"||t.status==="Encerrado"||t.status==="Cancelado") return false;
   const srvs = t.servicosTicket||[];
   if(srvs.length<2) return false;
   const qtdFin = srvs.filter(s=>s.finalizado?.marcado).length;
   return qtdFin>0 && qtdFin<srvs.length;
 }
 function precisaIniciarCredenciamento(t){
-  if(t.status === "Concluído" || t.status === "Cancelado") return false;
+  if(t.status === "Concluído" || t.status === "Encerrado" || t.status === "Cancelado") return false;
   const noCredenciamento = (t.setor||"").toLowerCase().includes("credenci");
   if(!noCredenciamento) return false;
   const srvs = t.servicosTicket || [];
@@ -858,7 +888,7 @@ function horasDesdeTransferenciaComercial(t){
   return (new Date() - new Date(ref)) / 3600000;
 }
 function precisaRetornoComercial24h(t){
-  if(t.status === "Concluído" || t.status === "Cancelado") return false;
+  if(t.status === "Concluído" || t.status === "Encerrado" || t.status === "Cancelado") return false;
   const noComercial = (t.setor||"").toLowerCase().includes("comercial");
   if(!noComercial) return false;
   if(!t.dataTransferenciaComercial) return false;
@@ -1105,7 +1135,7 @@ function mostrarTickets(){
   const lista = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
 
   const atrasados     = lista.filter(t=>{
-    if(t.status==="Concluído"||t.status==="Cancelado") return false;
+    if(t.status==="Concluído"||t.status==="Encerrado"||t.status==="Cancelado") return false;
     const s = calcularSLARestante(t); return s&&s.atrasado;
   }).length
   const comercial24h  = lista.filter(t=>precisaRetornoComercial24h(t)).length;;
@@ -1223,7 +1253,7 @@ function filtrarTickets(){
     lista = lista.filter(t => estaPendenciaCliente(t));
   } else if(alerta === "atrasados_sla"){
     lista = lista.filter(t => {
-      if(t.status==="Concluído"||t.status==="Cancelado") return false;
+      if(t.status==="Concluído"||t.status==="Encerrado"||t.status==="Cancelado") return false;
       const s = calcularSLARestante(t); return s && s.atrasado;
     });
   } else if(alerta === "comercial_24h"){
@@ -1340,6 +1370,7 @@ function renderListaTickets(lista){
             <span style="font-size:11px;color:#aaa;">#${t.id}</span>
             <strong style="display:block;font-size:14px;margin:2px 0;">${escHtml(t.titulo)}</strong>
             <span style="font-size:12px;color:#666;">${escHtml(t.cliente||"")} &bull; ${escHtml(t.setor||"")} &bull; ${escHtml(t.responsavel||"Sem responsável")}</span>
+            ${elegivelEncerrarPorFaltaResposta(t)?`<span class="tag-eligivel">TICKET ELEGÍVEL PARA SER ENCERRADO POR FALTA DE RESPOSTA DO CLIENTE</span>`:""}
             <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
               ${srvBadge}${estadoBadge}
             </div>
@@ -1376,12 +1407,21 @@ function novoTicket(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="grid-2col">
 
         <div style="grid-column:1/-1;">
-          <label><b>Título / Assunto *</b></label>
-          <input id="nt_titulo" placeholder="Descreva resumidamente o problema ou solicitação">
+          <label><b>Título *</b></label>
+          <select id="nt_titulo">
+            <option value="">-- Selecione --</option>
+            <option>NOVO CREDENCIAMENTO</option>
+            <option>NOVO SERVIÇO</option>
+          </select>
         </div>
         <div>
-          <label><b>Cliente *</b></label>
-          <input id="nt_cliente" placeholder="Nome do cliente">
+          <label><b>Nome Fantasia *</b></label>
+          <input id="nt_cliente" placeholder="Nome fantasia do cliente">
+        </div>
+        <div>
+          <label><b>CNPJ / CPF</b></label>
+          <input id="nt_cnpj" placeholder="CNPJ ou CPF (aceita números, pontos e traços)">
+          <div style="font-size:11px;color:#888;margin-top:2px;">Aceita CPF (11 dígitos) ou CNPJ (14 dígitos).</div>
         </div>
         <div>
           <label><b>Setor *</b></label>
@@ -1483,6 +1523,7 @@ function renderSrvTemp(){
 async function salvarNovoTicket(){
   const titulo     =document.getElementById("nt_titulo").value.trim();
   const cliente    =document.getElementById("nt_cliente").value.trim();
+  const cnpj       =(document.getElementById("nt_cnpj")?.value||"").trim();
   const setor      =document.getElementById("nt_setor").value;
   const responsavel=document.getElementById("nt_responsavel").value;
   const prioridade =document.getElementById("nt_prioridade").value;
@@ -1491,20 +1532,32 @@ async function salvarNovoTicket(){
   const descricao  =document.getElementById("nt_descricao").value.trim();
   const obs        =document.getElementById("nt_obs").value.trim();
 
-  if(!titulo) {alert("Informe o título.");document.getElementById("nt_titulo").focus();return;}
+  if(!titulo) {alert("Selecione o título.");document.getElementById("nt_titulo").focus();return;}
   if(!cliente){alert("Informe o cliente.");document.getElementById("nt_cliente").focus();return;}
   if(!setor)  {alert("Selecione o setor.");document.getElementById("nt_setor").focus();return;}
 
   const agr = agora();
+  // Observação interna com responsável + data/hora
+  let obsEntry = null;
+  if(obs){
+    const respObs = prompt("Informe o responsável pela observação (obrigatório):","") || "";
+    const respObsTrim = respObs.trim();
+    if(!respObsTrim){ alert("Responsável é obrigatório para registrar observação."); return; }
+    obsEntry = { texto: obs, responsavel: respObsTrim, usuario: usuarioLogado.nome, data: agr };
+  }
   const ticket={
-    id:gerarId(), titulo,cliente,setor,responsavel,prioridade,status,canal,descricao,obs,
+    id:gerarId(), titulo,cliente,cnpj,setor,responsavel,prioridade,status,canal,descricao,obs,
     abertoPor:usuarioLogado.nome,
     dataAbertura:agr,
     ultimaAtualizacao:agr,
     dataChegadaCredenciamento:(setor||'').toLowerCase().includes('credenci') ? agr : null,
     dataTransferenciaComercial:(setor||'').toLowerCase().includes('comercial') ? agr : null,
     servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),
-    historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]
+    observacoes: obsEntry ? [obsEntry] : [],
+    aguardandoClienteAcumuladoMs: 0,
+    aguardandoClienteInicio: null,
+    encerramento: null,
+    historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}].concat(obsEntry?[{acao:`Observação registrada — Responsável: ${obsEntry.responsavel}`,usuario:usuarioLogado.nome,data:agr,tipo:"observacao"}]:[])
   };
   tickets.unshift(ticket);
   await salvarTicket(ticket);
@@ -1563,6 +1616,7 @@ function verTicket(id){
         ${emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#36b9cc;color:white;">🔵 Em Aberto (Cred.)</span>':""}
         ${iniciado&&!emAberto&&!libParcial&&!alerta48&&!semIniciar&&!pendCliente?'<span class="badge" style="background:#4e73df;color:white;">🔵 Em andamento</span>':""}
       </div>
+      ${elegivelEncerrarPorFaltaResposta(t)?`<div class="tag-eligivel" style="margin-bottom:14px;">TICKET ELEGÍVEL PARA SER ENCERRADO POR FALTA DE RESPOSTA DO CLIENTE</div>`:""}
       <div style="font-size:12px;color:#888;margin-bottom:16px;">
         Aberto por <b>${escHtml(t.abertoPor)}</b> em ${formatarData(t.dataAbertura)} &bull; Canal: ${escHtml(t.canal||"-")}
         &bull; Última atualização: <b>${formatarData(t.ultimaAtualizacao)}</b>
@@ -1607,11 +1661,23 @@ function verTicket(id){
 
         <div style="grid-column:1/-1;">
           <label><b>Título</b></label>
-          <input id="vt_titulo" value="${escHtml(t.titulo)}">
+          <select id="vt_titulo">
+            ${["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].map(opt=>{
+              const sel = (t.titulo===opt) ? "selected" : "";
+              return `<option ${sel}>${opt}</option>`;
+            }).join("")}
+          </select>
+          ${(["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].includes(t.titulo)) ? "" : `<div style="margin-top:6px;font-size:11px;color:#b07a00;background:#fff3cd;border:1px solid #ffeeba;padding:6px;border-radius:6px;">
+            Título legado deste ticket: <b>${escHtml(t.titulo||"")}</b> (ao salvar, será padronizado para uma das opções acima)
+          </div>`}
         </div>
         <div>
-          <label><b>Cliente</b></label>
+          <label><b>Nome Fantasia</b></label>
           <input id="vt_cliente" value="${escHtml(t.cliente||"")}">
+        </div>
+        <div>
+          <label><b>CNPJ / CPF</b></label>
+          <input id="vt_cnpj" value="${escHtml(t.cnpj||"")}">
         </div>
         <div>
           <label><b>Setor Atual</b></label>
@@ -1634,7 +1700,7 @@ function verTicket(id){
         <div>
           <label><b>Status</b></label>
           <select id="vt_status">
-            ${["Aberto","Em andamento","Aguardando cliente","REENVIAR DOCUMENTO","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE","CLIENTE CIENTE DA PENDENCIA","Concluído","Cancelado"].map(s=>
+            ${["Aberto","Em andamento","Aguardando cliente","REENVIAR DOCUMENTO","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE","CLIENTE CIENTE DA PENDENCIA","Concluído","Encerrado","Cancelado"].map(s=>
               `<option ${s===t.status?"selected":""}>${s}</option>`).join("")}
           </select>
         </div>
@@ -1677,6 +1743,7 @@ function verTicket(id){
       <div class="ticket-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-primary" onclick="atualizarTicket('${t.id}')">💾 Salvar Alterações</button>
         <button class="btn-purple"  onclick="abrirModalTransf('${t.id}')">🔀 Transferir Setor</button>
+        <button class="btn-danger"  onclick="abrirModalEncerrarTicket('${t.id}')">✅ Encerrar Ticket</button>
         ${isAdm ? `<button class="btn-danger" onclick="excluirTicket('${t.id}')">🗑 Excluir Ticket</button>` : ""}
         <button class="btn-dark"    onclick="mostrarTickets()">Cancelar</button>
       </div>
@@ -2053,11 +2120,23 @@ function confirmarAguardandoCliente(){
   const agr = agora();
   tickets[idx].titulo     =document.getElementById("vt_titulo")?.value.trim()||tickets[idx].titulo;
   tickets[idx].cliente    =document.getElementById("vt_cliente")?.value.trim()||tickets[idx].cliente;
+  tickets[idx].cnpj       =(document.getElementById("vt_cnpj")?.value||"").trim()||tickets[idx].cnpj;
   tickets[idx].responsavel=document.getElementById("vt_responsavel")?.value||tickets[idx].responsavel;
   tickets[idx].prioridade =document.getElementById("vt_prioridade")?.value||tickets[idx].prioridade;
   tickets[idx].descricao  =document.getElementById("vt_descricao")?.value.trim()||tickets[idx].descricao;
-  tickets[idx].obs        =document.getElementById("vt_obs")?.value.trim()||tickets[idx].obs;
+const obsNovo = (document.getElementById("vt_obs")?.value||"").trim();
+const obsAnt = (tickets[idx].obs||"").trim();
+if(obsNovo && obsNovo !== obsAnt){
+  const respObs = prompt("Informe o responsável pela observação (obrigatório):","") || "";
+  const respObsTrim = respObs.trim();
+  if(!respObsTrim){ alert("Responsável é obrigatório para registrar observação."); return; }
+  if(!tickets[idx].observacoes) tickets[idx].observacoes=[];
+  tickets[idx].observacoes.push({ texto: obsNovo, responsavel: respObsTrim, usuario: usuarioLogado.nome, data: agr });
+  _logHistorico(idx,`Observação registrada — Responsável: ${respObsTrim}`,"observacao",{responsavel:respObsTrim});
+}
+tickets[idx].obs = obsNovo || tickets[idx].obs;
   tickets[idx].status = "Aguardando cliente";
+  iniciarAguardandoCliente(tickets[idx], agr);
   tickets[idx].pendenciaCliente     = texto;
   tickets[idx].pendenciaClienteResp = responsavelNome;
   tickets[idx].pendenciaClienteData = agr;
@@ -2066,6 +2145,69 @@ function confirmarAguardandoCliente(){
   salvar();
   fecharModal("modalAguardandoCliente");
   _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+
+
+/* ============================================================
+   MODAL ENCERRAR TICKET
+   ============================================================ */
+let _pendEncerrarTicket = { ticketId:null };
+
+function abrirModalEncerrarTicket(id){
+  const t = tickets.find(x=>x.id===id);
+  if(!t){ return; }
+  // se já estiver encerrado, avisa e não abre
+  if((t.status||"").toLowerCase()==="encerrado" || t.encerramento){
+    alert("Este ticket já está encerrado.");
+    return;
+  }
+  _pendEncerrarTicket = { ticketId:id };
+  document.getElementById("modalEncerrarResp").value = (t.responsavel||"");
+  document.getElementById("modalEncerrarMotivo").value = "";
+  document.getElementById("contadorEncerrarMotivo").textContent = "0";
+  const ta = document.getElementById("modalEncerrarMotivo");
+  ta.oninput = function(){
+    document.getElementById("contadorEncerrarMotivo").textContent = this.value.length;
+  };
+  document.getElementById("modalEncerrarTicket").style.display="flex";
+}
+
+function cancelarEncerramento(){
+  fecharModal("modalEncerrarTicket");
+  _pendEncerrarTicket = { ticketId:null };
+}
+
+async function confirmarEncerramento(){
+  const {ticketId} = _pendEncerrarTicket;
+  if(!ticketId){ cancelarEncerramento(); return; }
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ cancelarEncerramento(); return; }
+  const resp = (document.getElementById("modalEncerrarResp").value||"").trim();
+  const motivo = (document.getElementById("modalEncerrarMotivo").value||"").trim();
+  if(!resp){ alert("Informe o responsável."); return; }
+  if(!motivo){ alert("Informe o motivo."); return; }
+  if(motivo.length>600){ alert("Motivo excede 600 caracteres."); return; }
+
+  const agr = agora();
+
+  // Se estiver em "Aguardando cliente", fecha o período antes de encerrar
+  if(tickets[idx].status === "Aguardando cliente"){
+    finalizarAguardandoCliente(tickets[idx], agr);
+    tickets[idx].pendenciaCliente     = "";
+    tickets[idx].pendenciaClienteResp = "";
+    tickets[idx].pendenciaClienteData = "";
+  }
+
+  tickets[idx].status = "Encerrado";
+  tickets[idx].encerramento = { responsavel: resp, motivo, data: agr, usuario: usuarioLogado.nome };
+
+  _logHistorico(idx, `Ticket encerrado — Responsável: ${resp} — Motivo: "${motivo}"`, "encerramento", {responsavel: resp});
+  tickets[idx].ultimaAtualizacao = agr;
+  await salvarTicket(tickets[idx]);
+  fecharModal("modalEncerrarTicket");
+  _pendEncerrarTicket = { ticketId:null };
+  verTicket(ticketId);
+}
+
   verTicket(ticketId);
 }
 
@@ -2088,7 +2230,7 @@ function renderHistorico(hist){
     const isPendCliente = (h.acao||"").includes("Pendência");
     return `
       <div class="hist-row${isAtualiz?" atualiz":""}" ${isPendCliente?'style="background:#fce4ec;border-left:3px solid #e91e8c;padding-left:8px;"':""}>
-        <b>${escHtml(h.usuario)}</b>
+        <b>${escHtml(h.usuario)}</b>${h.responsavel?` <span style="font-size:10px;color:#666;">(Resp: ${escHtml(h.responsavel)})</span>`:""}
         ${isAtualiz?'<span style="background:#f6c23e;color:#000;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">UPDATE 48h</span>':""}
         ${isPendCliente?'<span style="background:#e91e8c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">PEND. CLIENTE</span>':""}
         — ${escHtml(h.acao)}
@@ -2165,6 +2307,7 @@ async function atualizarTicket(id){
   }
 
   if(statusAntigo==="Aguardando cliente" && novoStatus!=="Aguardando cliente"){
+    finalizarAguardandoCliente(tickets[idx], agora());
     tickets[idx].pendenciaCliente     = "";
     tickets[idx].pendenciaClienteResp = "";
     tickets[idx].pendenciaClienteData = "";
@@ -2172,11 +2315,23 @@ async function atualizarTicket(id){
 
   tickets[idx].titulo     =document.getElementById("vt_titulo").value.trim();
   tickets[idx].cliente    =document.getElementById("vt_cliente").value.trim();
+  tickets[idx].cnpj       =(document.getElementById("vt_cnpj")?.value||"").trim();
   tickets[idx].responsavel=document.getElementById("vt_responsavel").value;
   tickets[idx].prioridade =document.getElementById("vt_prioridade").value;
   tickets[idx].status     =novoStatus;
   tickets[idx].descricao  =document.getElementById("vt_descricao").value.trim();
-  tickets[idx].obs        =document.getElementById("vt_obs").value.trim();
+  const obsNovo = document.getElementById("vt_obs").value.trim();
+  const obsAnt = (tickets[idx].obs||"").trim();
+  // Se houver nova observação (mudança com conteúdo), pede responsável e registra data/hora
+  if(obsNovo && obsNovo !== obsAnt){
+    const respObs = prompt("Informe o responsável pela observação (obrigatório):","") || "";
+    const respObsTrim = respObs.trim();
+    if(!respObsTrim){ alert("Responsável é obrigatório para registrar observação."); return; }
+    if(!tickets[idx].observacoes) tickets[idx].observacoes = [];
+    tickets[idx].observacoes.push({ texto: obsNovo, responsavel: respObsTrim, usuario: usuarioLogado.nome, data: agora() });
+    _logHistorico(idx,`Observação registrada — Responsável: ${respObsTrim}`,"observacao",{responsavel:respObsTrim});
+  }
+  tickets[idx].obs        =obsNovo;
   if(novoStatus!==statusAntigo){
     _logHistorico(idx,`Status: "${statusAntigo}" → "${novoStatus}"`);
   } else {
@@ -2206,9 +2361,11 @@ async function excluirTicket(id){
 async function adicionarEvolucao(id){
   const texto=document.getElementById("novaEvolucao").value.trim();
   if(!texto){alert("Digite a evolução antes de registrar.");return;}
+  const resp = (prompt("Informe o responsável pela observação (obrigatório):","") || "").trim();
+  if(!resp){ alert("Responsável é obrigatório para registrar observação."); return; }
   const idx=tickets.findIndex(t=>t.id===id);
   if(idx<0)return;
-  _logHistorico(idx,texto);
+  _logHistorico(idx,texto,"observacao",{responsavel:resp});
   tickets[idx].ultimaAtualizacao=agora();
   await salvarTicket(tickets[idx]);
   verTicket(id);
@@ -2218,16 +2375,97 @@ async function adicionarEvolucao(id){
 /* ============================================================
    UTILITÁRIOS
    ============================================================ */
-function _logHistorico(idx,acao,tipo="sistema"){
+function _logHistorico(idx,acao,tipo="sistema",meta={}){
   if(!tickets[idx].historico) tickets[idx].historico=[];
-  tickets[idx].historico.push({acao,usuario:usuarioLogado.nome,data:agora(),tipo});
+  const entry = {acao,usuario:usuarioLogado.nome,data:agora(),tipo};
+  if(meta && typeof meta === "object"){
+    Object.keys(meta).forEach(k=> entry[k]=meta[k]);
+  }
+  tickets[idx].historico.push(entry);
 }
-function gerarId(){ return Date.now().toString(36).toUpperCase(); }
+function gerarId(){
+  // ID numérico (inteiro) sequencial
+  const ids = (tickets||[]).map(t=>String(t.id||"").trim());
+  const nums = ids.map(v=>/^[0-9]+$/.test(v)?parseInt(v,10):NaN).filter(n=>Number.isFinite(n));
+  const maxExistente = nums.length ? Math.max(...nums) : 0;
+  const seqLS = parseInt(localStorage.getItem("ticket_seq")||"0",10) || 0;
+  const prox = Math.max(maxExistente, seqLS) + 1;
+  localStorage.setItem("ticket_seq", String(prox));
+  return String(prox);
+}
+
+function padronizarIdsTickets(){
+  const ids = (tickets||[]).map(t=>String(t.id||"").trim());
+  const nums = ids.map(v=>/^[0-9]+$/.test(v)?parseInt(v,10):NaN).filter(n=>Number.isFinite(n));
+  let max = nums.length ? Math.max(...nums) : 0;
+  let mudou = false;
+  (tickets||[]).forEach(t=>{
+    const atual = String(t.id||"").trim();
+    if(!/^[0-9]+$/.test(atual)){
+      max += 1;
+      t.idLegacy = t.idLegacy || atual;
+      t.id = String(max);
+      mudou = true;
+      if(!t.historico) t.historico = [];
+      t.historico.push({acao:`ID padronizado (legado: ${atual})`,usuario:(usuarioLogado?.nome||"sistema"),data:agora(),tipo:"sistema"});
+    }
+  });
+  if(mudou){
+    localStorage.setItem("ticket_seq", String(max));
+  }
+}
 function agora(){   return new Date().toISOString(); }
 function formatarData(iso){
   if(!iso)return "-";
   return new Date(iso).toLocaleString("pt-BR");
 }
+
+// --------------------
+// CONTROLE: tempo acumulado em "Aguardando cliente" (para elegibilidade de encerramento)
+// --------------------
+function _normalizarAguardandoCliente(t){
+  if(!t) return;
+  if(typeof t.aguardandoClienteAcumuladoMs !== "number") t.aguardandoClienteAcumuladoMs = 0;
+  if(t.status === "Aguardando cliente" && !t.aguardandoClienteInicio){
+    // tenta inferir o início (legado)
+    t.aguardandoClienteInicio = t.pendenciaClienteData || t.ultimaAtualizacao || t.dataAbertura || agora();
+  }
+  if(t.status !== "Aguardando cliente" && t.aguardandoClienteInicio){
+    // segurança: se mudou status e ficou com início pendurado, fecha no momento atual
+    finalizarAguardandoCliente(t, agora());
+  }
+}
+function iniciarAguardandoCliente(t, isoInicio){
+  if(!t) return;
+  if(typeof t.aguardandoClienteAcumuladoMs !== "number") t.aguardandoClienteAcumuladoMs = 0;
+  t.aguardandoClienteInicio = isoInicio || agora();
+}
+function finalizarAguardandoCliente(t, isoFim){
+  if(!t) return;
+  if(typeof t.aguardandoClienteAcumuladoMs !== "number") t.aguardandoClienteAcumuladoMs = 0;
+  if(!t.aguardandoClienteInicio) return;
+  const ini = new Date(t.aguardandoClienteInicio).getTime();
+  const fim = new Date(isoFim || agora()).getTime();
+  if(Number.isFinite(ini) && Number.isFinite(fim) && fim>=ini){
+    t.aguardandoClienteAcumuladoMs += (fim - ini);
+  }
+  t.aguardandoClienteInicio = null;
+}
+function horasAguardandoClienteAcumuladas(t){
+  if(!t) return 0;
+  _normalizarAguardandoCliente(t);
+  const base = (typeof t.aguardandoClienteAcumuladoMs === "number") ? t.aguardandoClienteAcumuladoMs : 0;
+  if(t.status === "Aguardando cliente" && t.aguardandoClienteInicio){
+    const ini = new Date(t.aguardandoClienteInicio).getTime();
+    const now = Date.now();
+    if(Number.isFinite(ini) && now>=ini) return (base + (now-ini))/3600000;
+  }
+  return base/3600000;
+}
+function elegivelEncerrarPorFaltaResposta(t){
+  return horasAguardandoClienteAcumuladas(t) >= 420;
+}
+
 function calcularSLARestante(ticket){
   const srvs=ticket.servicosTicket||[];
   let slaHoras=0;
@@ -2243,7 +2481,7 @@ function calcularSLARestante(ticket){
   return{horas:restante,atrasado:restante<0,porcentagem:Math.min(100,Math.round((decorrido/slaHoras)*100))};
 }
 function corStatus(s){
-  return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","REENVIAR DOCUMENTO":"#fd7e14","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE":"#6f42c1","CLIENTE CIENTE DA PENDENCIA":"#36b9cc","Concluído":"#1cc88a","Cancelado":"#858796"}[s]||"#4e73df";
+  return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","REENVIAR DOCUMENTO":"#fd7e14","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE":"#6f42c1","CLIENTE CIENTE DA PENDENCIA":"#36b9cc","Concluído":"#1cc88a","Encerrado":"#343a40","Cancelado":"#858796"}[s]||"#4e73df";
 }
 function corPrioridade(p){
   return{"Baixa":"#1cc88a","Normal":"#4e73df","Alta":"#f6c23e","Urgente":"#e74a3b"}[p]||"#4e73df";
@@ -2661,7 +2899,7 @@ function atualizarDashboard(){
   const emAberto     = lista.filter(t => t.status !== "Concluído" && t.status !== "Cancelado").length;
   const totalHrsPend = lista.reduce((acc,t) => acc + _horasPendenciaCliente(t), 0);
   const atrasadosAtivos = lista.filter(t => {
-    if(t.status==="Concluído"||t.status==="Cancelado") return false;
+    if(t.status==="Concluído"||t.status==="Encerrado"||t.status==="Cancelado") return false;
     const sla = _slaTicket(t); if(!sla) return false;
     return (new Date()-new Date(t.dataAbertura))/3600000 > sla;
   }).length;
