@@ -382,6 +382,10 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     </div>
   
 
+  </div>
+</div>
+</div>
+
 <!-- ============================================================
      MODAL: ENCERRAR TICKET
      ============================================================ -->
@@ -522,7 +526,90 @@ let responsaveis     = [];
 let servicosCadastro = [];
 let tickets          = [];
 let usuarioLogado    = null;
-let _dadosCarregados = false;
+let _dadosCarregados = false;// Controle de tela atual (para re-render quando chegar atualização em tempo real)
+let _telaAtual = "login";      // "login" | "tickets" | "ticket" | "cadastros" | "dashboard"
+let _ticketAbertoId = null;
+
+// Listeners (onSnapshot) — para atualizar dados em tempo real
+let _unsubs = { tickets:null, usuarios:null, responsaveis:null, servicos:null, config:null };
+
+function pararRealtime(){
+  try{ Object.values(_unsubs).forEach(fn=>{ if(typeof fn==="function") fn(); }); }catch(e){}
+  _unsubs = { tickets:null, usuarios:null, responsaveis:null, servicos:null, config:null };
+}
+
+function _atualizarTelaAtual(){
+  if(!usuarioLogado) return;
+
+  // Se estiver vendo um ticket específico, reabre ele (mantém sempre atualizado)
+  if(_telaAtual === "ticket" && _ticketAbertoId){
+    try{ verTicket(_ticketAbertoId, true); }catch(e){ /* ignore */ }
+    return;
+  }
+
+  // Se estiver na lista, atualiza o container sem resetar filtros (se existirem)
+  if(_telaAtual === "tickets"){
+    const el = document.getElementById("listaTickets");
+    if(el){
+      try{ filtrarTickets(); }catch(e){ mostrarTickets(); }
+    }else{
+      mostrarTickets();
+    }
+    return;
+  }
+
+  if(_telaAtual === "cadastros"){
+    try{ mostrarCadastros(); }catch(e){}
+    return;
+  }
+
+  if(_telaAtual === "dashboard"){
+    try{ mostrarDashboard(); }catch(e){}
+    return;
+  }
+}
+
+function iniciarRealtime(){
+  if(!db) return;
+  pararRealtime();
+
+  // Config (setores)
+  _unsubs.config = db.collection("configuracoes").doc("geral").onSnapshot((doc)=>{
+    if(doc.exists){
+      setores = doc.data().setores || setores || [];
+      if(usuarioLogado){
+        try{ atualizarSeletorVisao(); }catch(e){}
+      }
+    }
+  }, (err)=>console.error("Realtime configuracoes:", err));
+
+  _unsubs.usuarios = db.collection("usuarios").onSnapshot((snap)=>{
+    usuarios = snap.docs.map(d=>({ _id:d.id, ...d.data() }));
+    // Se o usuário logado teve dados alterados (ex: setor/perfil), atualiza referência
+    if(usuarioLogado?._id){
+      const novo = usuarios.find(u=>u._id===usuarioLogado._id);
+      if(novo) usuarioLogado = novo;
+    }
+    _atualizarTelaAtual();
+  }, (err)=>console.error("Realtime usuarios:", err));
+
+  _unsubs.responsaveis = db.collection("responsaveis").onSnapshot((snap)=>{
+    responsaveis = snap.docs.map(d=>({ _id:d.id, ...d.data() }));
+    _atualizarTelaAtual();
+  }, (err)=>console.error("Realtime responsaveis:", err));
+
+  _unsubs.servicos = db.collection("servicos").onSnapshot((snap)=>{
+    servicosCadastro = snap.docs.map(d=>({ _id:d.id, ...d.data() }));
+    _atualizarTelaAtual();
+  }, (err)=>console.error("Realtime servicos:", err));
+
+  _unsubs.tickets = db.collection("tickets").onSnapshot((snap)=>{
+    tickets = snap.docs.map(d=>({ _id:d.id, ...d.data() }));
+    padronizarIdsTickets();
+    _atualizarTelaAtual();
+  }, (err)=>console.error("Realtime tickets:", err));
+}
+
 
 // Pendências de modal
 let _pendIniciado        = {ticketId:null,srvIdx:null};
@@ -596,7 +683,7 @@ async function salvarUsuario(usuario) {
       senha:  usuario.senha  || ""
     };
     if (usuario._id) {
-      await db.collection("usuarios").doc(usuario._id).set(dados);
+      await db.collection("usuarios").doc(usuario._id).set(dados, { merge: true });
     } else {
       const ref = await db.collection("usuarios").add(dados);
       usuario._id = ref.id;
@@ -613,7 +700,7 @@ async function salvarResponsavel(resp) {
   try {
     if (resp._id) {
       const { _id, ...dados } = resp;
-      await db.collection("responsaveis").doc(_id).set(dados);
+      await db.collection("responsaveis").doc(_id).set(dados, { merge: true });
     } else {
       const ref = await db.collection("responsaveis").add({ nome: resp.nome, setor: resp.setor });
       resp._id = ref.id;
@@ -630,7 +717,7 @@ async function salvarServicoCad(srv) {
   try {
     if (srv._id) {
       const { _id, ...dados } = srv;
-      await db.collection("servicos").doc(_id).set(dados);
+      await db.collection("servicos").doc(_id).set(dados, { merge: true });
     } else {
       const ref = await db.collection("servicos").add({ nome: srv.nome, sla: srv.sla });
       srv._id = ref.id;
@@ -647,7 +734,7 @@ async function salvarTicket(ticket) {
   try {
     if (ticket._id) {
       const { _id, ...dados } = ticket;
-      await db.collection("tickets").doc(_id).set(dados);
+      await db.collection("tickets").doc(_id).set(dados, { merge: true });
     } else {
       const ref = await db.collection("tickets").add(
         Object.fromEntries(Object.entries(ticket).filter(([k]) => k !== '_id'))
@@ -663,17 +750,16 @@ async function excluirTicketFirebase(id) {
 }
 
 // Função de compatibilidade — salva TUDO de uma vez
+// ⚠️ IMPORTANTE: esta função NÃO deleta documentos no Firestore.
+// Deleções devem ser feitas por funções específicas (excluirTicketFirebase, etc.).
 async function salvar() {
   if (!(window.db || (typeof db !== 'undefined' && db))) {
     console.warn("Firebase/Firestore não inicializado — salvar() ignorado.");
     return;
   }
 
-  async function _syncCollection(colName, arr) {
+  async function _upsertCollection(colName, arr) {
     const colRef = db.collection(colName);
-    const snap = await colRef.get();
-    const existentes = new Set(snap.docs.map(d => d.id));
-    const desejados  = new Set(arr.filter(x => x && x._id).map(x => x._id));
 
     async function _commitEmLotes(ops) {
       const LIMITE = 450;
@@ -684,11 +770,8 @@ async function salvar() {
       }
     }
 
-    const paraDeletar = [...existentes].filter(id => !desejados.has(id));
-    const delOps = paraDeletar.map(id => (batch) => batch.delete(colRef.doc(id)));
-    await _commitEmLotes(delOps);
-
-    const upsertOps = arr
+    // Upsert (somente itens com _id)
+    const upsertOps = (arr || [])
       .filter(x => x && x._id)
       .map(item => (batch) => {
         const { _id, ...dados } = item;
@@ -696,7 +779,8 @@ async function salvar() {
       });
     await _commitEmLotes(upsertOps);
 
-    for (const item of arr) {
+    // Inserts (itens sem _id)
+    for (const item of (arr || [])) {
       if (!item || item._id) continue;
       const { _id, ...dados } = item;
       const ref = await colRef.add(dados);
@@ -706,15 +790,18 @@ async function salvar() {
 
   try {
     await db.collection("configuracoes").doc("geral").set({ setores: setores || [] }, { merge: true });
-    await _syncCollection("usuarios",    usuarios        || []);
-    await _syncCollection("responsaveis",responsaveis   || []);
-    await _syncCollection("servicos",    servicosCadastro|| []);
-    await _syncCollection("tickets",     tickets         || []);
-    console.log("✅ salvar(): sincronização concluída.");
+    await _upsertCollection("usuarios",     usuarios         || []);
+    await _upsertCollection("responsaveis", responsaveis      || []);
+    await _upsertCollection("servicos",     servicosCadastro  || []);
+    await _upsertCollection("tickets",      tickets           || []);
+    console.log("✅ salvar(): upsert concluído (sem deleções).");
   } catch (err) {
     console.error("❌ salvar(): erro:", err);
   }
 }
+
+// Alias usado por trechos antigos do sistema
+async function salvarTudo(){ return salvar(); }
 
 
 /* ============================================================
@@ -789,9 +876,14 @@ function login(){
 
   atualizarSeletorVisao();
   mostrarTickets();
+  _telaAtual="tickets";
+  iniciarRealtime();
 }
 
 function logout(){
+  pararRealtime();
+  _telaAtual="login";
+  _ticketAbertoId=null;
   usuarioLogado = null;
   document.getElementById("loginUserName").value = "";
   document.getElementById("loginPassword").value = "";
@@ -922,6 +1014,8 @@ function precisaRetornoComercial24h(t){
    CADASTROS — apenas para ADM
    ============================================================ */
 function mostrarCadastros(){
+  _telaAtual="cadastros";
+  _ticketAbertoId=null;
   if(usuarioLogado.perfil !== "adm"){
     alert("Acesso restrito. Apenas administradores podem acessar os cadastros.");
     return;
@@ -982,7 +1076,11 @@ function salvarServico(i){
 
 function excluirServicoCad(i){
   if(!confirm("Excluir serviço?")) return;
-  servicosCadastro.splice(i,1); salvar(); abaServicos();
+  const item = servicosCadastro[i];
+  if(item && item._id) excluirServicoFirebase(item._id);
+  servicosCadastro.splice(i,1);
+  salvar();
+  abaServicos();
 }
 
 /* ---- SETORES ---- */
@@ -1026,7 +1124,7 @@ function abaResponsaveis(){
           <select onchange="responsaveis[${i}].setor=this.value;salvar()" style="flex:1;min-width:100px;">
             ${setores.map(s=>`<option ${s===r.setor?"selected":""}>${escHtml(s)}</option>`).join("")}
           </select>
-          <button class="btn-danger" onclick="responsaveis.splice(${i},1);salvar();abaResponsaveis()">Excluir</button>
+          <button class="btn-danger" onclick="excluirResponsavel(${i})">Excluir</button>
         </li>`).join("")}
     </ul>`;
 }
@@ -1036,6 +1134,17 @@ function addResponsavel(){
   const setor = document.getElementById("novoRespSetor").value;
   if(!nome){ alert("Informe o nome."); return; }
   responsaveis.push({nome,setor}); salvar(); abaResponsaveis();
+
+
+function excluirResponsavel(i){
+  if(!confirm("Excluir responsável?")) return;
+  const r = responsaveis[i];
+  if(r && r._id) excluirResponsavelFirebase(r._id);
+  responsaveis.splice(i,1);
+  salvar();
+  abaResponsaveis();
+}
+
 }
 
 /* ---- USUÁRIOS ---- */
@@ -1154,6 +1263,8 @@ async function excluirUsuario(i){
    TICKETS — LISTA
    ============================================================ */
 function mostrarTickets(){
+  _telaAtual="tickets";
+  _ticketAbertoId=null;
   const lista = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
 
   const atrasados     = lista.filter(t=>{
@@ -1586,7 +1697,9 @@ const obs        =document.getElementById("nt_obs").value.trim();
 /* ============================================================
    VER / EDITAR TICKET
    ============================================================ */
-function verTicket(id){
+function verTicket(id, _realtimeRefresh=false){
+  _telaAtual="ticket";
+  _ticketAbertoId = id;
   const t=tickets.find(x=>x.id===id);
   if(!t){alert("Ticket não encontrado.");return;}
 
@@ -1951,43 +2064,39 @@ function cancelarDesmarcarFin(){
 function confirmarDesmarcarFin(){
   const {ticketId, srvIdx} = _pendDesmarcarFin;
   if(!ticketId && srvIdx===null){ fecharModal("modalDesmarcarFin"); return; }
+
   const respVal = document.getElementById("modalDesmarcarFinResp").value.trim();
   const responsavelNome = respVal.split(" (")[0];
   if(!responsavelNome){ alert("Selecione o responsável."); return; }
+
   const obs = document.getElementById("modalDesmarcarFinObs").value.trim();
+
   const idx  = tickets.findIndex(t=>t.id===ticketId);
   if(idx<0){ fecharModal("modalDesmarcarFin"); return; }
+
   const srv  = tickets[idx].servicosTicket[srvIdx];
   const agr  = agora();
+
   const estavaConcluido = tickets[idx].status==="Concluído";
   if(estavaConcluido){
-    tickets[idx].status       = "Em andamento";
+    tickets[idx].status        = "Em andamento";
     tickets[idx].dataConclusao = null;
     _logHistorico(idx, `Ticket reaberto — serviço "${srv.nome}" desmarcado por ${responsavelNome}`);
   }
+
   const nomeAnterior = srv.finalizado?.responsavel || srv.finalizado?.usuario || "";
   srv.finalizado = { marcado:false, usuario:"", responsavel:"", obs:"", data:"" };
+
   const acao = `Serviço "${srv.nome}" DESMARCADO — por: ${responsavelNome}${obs?` — Motivo: "${obs}"`:""}${nomeAnterior?` (anterior: ${nomeAnterior})`:""}`;
   _logHistorico(idx, acao);
-  tickets[idx].ultimaAtualizacao = agr;
-  if(obsNovo){
-    abrirModalObsInterna(idx, obsNovo, ()=>{
-      try{ document.getElementById("vt_obs").value=""; }catch(e){}
-      salvar();
-      fecharModal("modalAguardandoCliente");
-      _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
-      abrirTicket(tickets[idx].id);
-    });
-    return;
-  }
 
+  tickets[idx].ultimaAtualizacao = agr;
   salvar();
   fecharModal("modalDesmarcarFin");
   _pendDesmarcarFin={ticketId:null,srvIdx:null};
-  refreshTabelaSrv(idx);
-  refreshHistorico(idx);
-  if(estavaConcluido) verTicket(ticketId);
+  verTicket(ticketId);
 }
+
 
 function cancelarFinalizado(){
   const {srvIdx} = _pendFinalizado;
@@ -2099,6 +2208,8 @@ function confirmarAtualizacao(){
    MODAL AGUARDANDO CLIENTE
    ============================================================ */
 function abrirModalAguardandoCliente(id){
+  // Garantia: setar pendência caso tenha sido aberto fora do fluxo padrão
+  if(!_pendAguardandoCliente.ticketId) _pendAguardandoCliente = { ticketId:id, statusAnterior: (tickets.find(x=>x.id===id)?.status||null) };
   const t=tickets.find(x=>x.id===id);
   document.getElementById("modalAguardandoClienteInfo").textContent =
     `Ticket #${id} — "${t?.titulo||""}" | Cliente: ${t?.cliente||"?"}`;
@@ -2125,30 +2236,55 @@ function cancelarAguardandoCliente(){
 function confirmarAguardandoCliente(){
   const {ticketId, statusAnterior} = _pendAguardandoCliente;
   if(!ticketId){ fecharModal("modalAguardandoCliente"); return; }
+
   const respVal = document.getElementById("modalAguardandoClienteResp").value.trim();
   const responsavelNome = respVal.split(" (")[0];
   if(!responsavelNome){ alert("Selecione o responsável."); return; }
+
   const texto = document.getElementById("modalAguardandoClienteTexto").value.trim();
   if(!texto){ alert("Informe o que o cliente precisa fazer."); return; }
+
   const idx=tickets.findIndex(t=>t.id===ticketId);
   if(idx<0){ fecharModal("modalAguardandoCliente"); return; }
+
   const agr = agora();
-  tickets[idx].titulo     =document.getElementById("vt_titulo")?.value.trim()||tickets[idx].titulo;
-  tickets[idx].cliente    =document.getElementById("vt_cliente")?.value.trim()||tickets[idx].cliente;
-  tickets[idx].cnpj       =(document.getElementById("vt_cnpj")?.value||"").trim()||tickets[idx].cnpj;
-  tickets[idx].responsavel=document.getElementById("vt_responsavel")?.value||tickets[idx].responsavel;
-  tickets[idx].prioridade =document.getElementById("vt_prioridade")?.value||tickets[idx].prioridade;
-const obsNovo = (document.getElementById("vt_obs")?.value||"").trim();
-tickets[idx].status = "Aguardando cliente";
+
+  // Persistir possíveis mudanças do formulário do ticket (se estiver aberto)
+  tickets[idx].titulo      = document.getElementById("vt_titulo")?.value.trim() || tickets[idx].titulo;
+  tickets[idx].cliente     = document.getElementById("vt_cliente")?.value.trim() || tickets[idx].cliente;
+  tickets[idx].cnpj        = (document.getElementById("vt_cnpj")?.value || "").trim() || tickets[idx].cnpj;
+  tickets[idx].responsavel = document.getElementById("vt_responsavel")?.value || tickets[idx].responsavel;
+  tickets[idx].prioridade  = document.getElementById("vt_prioridade")?.value || tickets[idx].prioridade;
+
+  const obsNovo = (document.getElementById("vt_obs")?.value || "").trim();
+
+  tickets[idx].status = "Aguardando cliente";
   iniciarAguardandoCliente(tickets[idx], agr);
+
   tickets[idx].pendenciaCliente     = texto;
   tickets[idx].pendenciaClienteResp = responsavelNome;
   tickets[idx].pendenciaClienteData = agr;
+
   _logHistorico(idx, `Status: "${statusAnterior||"?"}" → "Aguardando cliente" — Responsável: ${responsavelNome} — Pendência: "${texto}"`);
   tickets[idx].ultimaAtualizacao = agr;
+
+  // Se houver observação interna preenchida, registra com responsável antes de salvar
+  if(obsNovo){
+    abrirModalObsInterna(idx, obsNovo, ()=>{
+      try{ const el=document.getElementById("vt_obs"); if(el) el.value=""; }catch(e){}
+      salvar();
+      fecharModal("modalAguardandoCliente");
+      _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+      verTicket(ticketId);
+    });
+    return;
+  }
+
   salvar();
   fecharModal("modalAguardandoCliente");
   _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
+  verTicket(ticketId);
+}
 
 
 /* ============================================================
@@ -2873,6 +3009,8 @@ const PALETA = [
 
 /* ── Renderiza o Dashboard ── */
 function mostrarDashboard(){
+  _telaAtual="dashboard";
+  _ticketAbertoId=null;
   document.getElementById("conteudo").innerHTML = `
     <div style="max-width:1100px;">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:18px;">
