@@ -2217,7 +2217,7 @@ function abrirModalObsInterna(idx, texto, afterFn){
 
 function confirmarModalObsInterna(){
   const idx = _pendObsInterna.ticketIdx;
-  const texto = _pendObsInterna.texto || "";
+  const texto = (document.getElementById("modalObsTexto")?.value||_pendObsInterna.texto||"").trim();
   const resp = (document.getElementById("modalObsResp")?.value||"").trim();
 
   if(!resp){ alert("Selecione o responsável."); return; }
@@ -2340,7 +2340,7 @@ function abrirModalTransf(id){
   document.getElementById("modalTransf").style.display="flex";
 }
 
-function confirmarTransferencia(){
+async function confirmarTransferencia(){
   if(!_ticketTransfId)return;
   const destino=document.getElementById("modalSetorDestino").value;
   if(!destino){alert("Selecione o setor.");return;}
@@ -2373,7 +2373,7 @@ function confirmarTransferencia(){
 /* ============================================================
    EDITAR / EXCLUIR / HISTÓRICO
    ============================================================ */
-async function atualizarTicket(id){
+async async function atualizarTicket(id){
   const idx=tickets.findIndex(t=>t.id===id);
   if(idx<0)return;
   const statusAntigo=tickets[idx].status;
@@ -2403,7 +2403,7 @@ const obsNovo = (document.getElementById("vt_obs")?.value||"").trim();
     abrirModalObsInterna(idx, obsNovo, ()=>{
       try{ document.getElementById("vt_obs").value=""; }catch(e){}
       salvarTudo();
-      abrirTicket(id);
+      verTicket(id);
     });
     return;
   }
