@@ -2935,19 +2935,37 @@ function elegivelEncerrarPorFaltaResposta(t){
 }
 
 function calcularSLARestante(ticket){
-  const srvs=ticket.servicosTicket||[];
-  let slaHoras=0;
-  const nomeSrv=srvs.length?srvs[0].nome:(ticket.servico||"");
-  if(nomeSrv){
-    const sc=servicosCadastro.find(s=>s.nome===nomeSrv);
-    slaHoras=sc?sc.sla:0;
+  const srvs = ticket.servicosTicket || [];
+
+  // Regra: SLA só deve contar para serviços NÃO finalizados.
+  // Mantemos o comportamento atual (SLA por serviço), mas ignoramos os que já estão finalizados.
+  let slaHoras = 0;
+
+  // Se houver serviços no ticket, considera o primeiro que ainda NÃO foi finalizado.
+  // Se todos estiverem finalizados, não exibe SLA/atraso.
+  let nomeSrv = "";
+  if(srvs.length){
+    const srvAtivo = srvs.find(s => !(s.finalizado?.marcado));
+    nomeSrv = srvAtivo ? (srvAtivo.nome || "") : "";
+  }else{
+    // Fallback legado: tickets antigos podem ter apenas `ticket.servico`
+    nomeSrv = ticket.servico || "";
   }
-  if(!slaHoras)return null;
-  const abertura  =new Date(ticket.dataAbertura);
-  const decorrido =(new Date()-abertura)/3600000;
-  const restante  =slaHoras-decorrido;
-  return{horas:restante,atrasado:restante<0,porcentagem:Math.min(100,Math.round((decorrido/slaHoras)*100))};
+
+  if(nomeSrv){
+    const sc = servicosCadastro.find(s => s.nome === nomeSrv);
+    slaHoras = sc ? sc.sla : 0;
+  }
+
+  if(!slaHoras) return null;
+
+  const abertura  = new Date(ticket.dataAbertura);
+  const decorrido = (new Date() - abertura) / 3600000;
+  const restante  = slaHoras - decorrido;
+
+  return {horas:restante, atrasado:restante < 0, porcentagem:Math.min(100, Math.round((decorrido / slaHoras) * 100))};
 }
+
 function corStatus(s){
   return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","REENVIAR DOCUMENTO":"#fd7e14","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE":"#6f42c1","CLIENTE CIENTE DA PENDENCIA":"#36b9cc","Concluído":"#1cc88a","Encerrado":"#343a40","Cancelado":"#858796"}[s]||"#4e73df";
 }
