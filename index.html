@@ -290,6 +290,26 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
   </div>
 </div>
 
+
+<!-- ============================================================
+     MODAL: RESPONSÁVEL AO MARCAR ASSINATURA
+     ============================================================ -->
+<div id="modalAssinatura" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>✍️ Marcar Assinatura</h3>
+    <p id="modalAssinaturaInfo" style="font-size:13px;color:#555;margin-bottom:10px;"></p>
+    <div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#4e73df;">
+      📝 O responsável e a data/hora serão gravados no histórico.
+    </div>
+    <label style="margin-top:6px;display:block;"><b>Responsável:</b></label>
+    <select id="modalAssinaturaResp" style="margin:6px 0 16px;"></select>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-success" onclick="confirmarAssinatura()">✔ Confirmar</button>
+      <button class="btn-dark"    onclick="cancelarAssinatura()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============================================================
      MODAL: RESPONSÁVEL AO FINALIZAR SERVIÇO
      ============================================================ -->
@@ -384,6 +404,36 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 
   </div>
 </div>
+</div>
+
+
+<!-- ============================================================
+     MODAL: RETOMAR EM ANDAMENTO (SAINDO DE AGUARDANDO CLIENTE)
+     ============================================================ -->
+<div id="modalRetomarAndamento" class="modal-overlay" style="display:none;">
+  <div class="modal-box" style="max-width:560px;">
+    <h3>▶️ Retomar: Em andamento</h3>
+    <p id="modalRetomarAndamentoInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#856404;">
+      📝 Ao mudar de <b>"Aguardando cliente"</b> para <b>"Em andamento"</b>, informe o responsável e descreva o motivo/retomada (máx. 500 caracteres). Isso será registrado com data e hora.
+    </div>
+
+    <label style="margin-top:6px;display:block;"><b>Responsável *</b></label>
+    <select id="modalRetomarAndamentoResp" style="margin:6px 0 8px;"></select>
+
+    <label style="display:block;font-size:12px;color:#666;margin-top:4px;"><b>Descrição da retomada *</b></label>
+    <textarea id="modalRetomarAndamentoTexto" rows="5" maxlength="500"
+      style="margin:4px 0 4px;resize:vertical;"
+      placeholder="Descreva o que motivou a retomada do atendimento (máx. 500 caracteres)..."></textarea>
+    <div style="text-align:right;font-size:11px;color:#888;margin-bottom:12px;">
+      <span id="contadorRetomarAndamento">0</span>/500 caracteres
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-warning" style="color:#000;" onclick="confirmarRetomarAndamento()">✔ Confirmar Retomada</button>
+      <button class="btn-dark" onclick="cancelarRetomarAndamento()">Cancelar</button>
+    </div>
+  </div>
 </div>
 
 <!-- ============================================================
@@ -1626,7 +1676,7 @@ function adicionarSrvTemp(){
   const nome=document.getElementById("nt_srv_sel").value;
   if(!nome){alert("Selecione um serviço.");return;}
   if(_srvTemp.find(s=>s.nome===nome)){alert("Serviço já adicionado.");return;}
-  _srvTemp.push({nome,iniciado:{marcado:false,usuario:"",responsavel:"",obs:"",data:""},finalizado:{marcado:false,usuario:"",data:""}});
+  _srvTemp.push({nome,iniciado:{marcado:false,usuario:"",responsavel:"",obs:"",data:""},assinatura:{marcado:false,usuario:"",responsavel:"",data:""},finalizado:{marcado:false,usuario:"",responsavel:"",obs:"",data:""}});
   renderSrvTemp();
 }
 
@@ -1896,8 +1946,9 @@ function renderTabelaServicosTicket(t){
     <table class="srv-table">
       <tr>
         <th>Serviço</th>
-        <th style="text-align:center;width:180px;">✅ Iniciado</th>
-        <th style="text-align:center;width:180px;">🏁 Finalizado</th>
+        <th style="text-align:center;width:170px;">✅ Iniciado</th>
+        <th style="text-align:center;width:170px;">✍️ Assinatura</th>
+        <th style="text-align:center;width:170px;">🏁 Finalizado</th>
         <th style="width:70px;"></th>
       </tr>
       ${srvs.map((s,i)=>`
@@ -1925,7 +1976,28 @@ function renderTabelaServicosTicket(t){
             </div>
           </td>
 
-          <!-- FINALIZADO -->
+          
+          <!-- ASSINATURA -->
+          <td>
+            <div class="chk-cell">
+              <div class="chk-row">
+                <input type="checkbox" id="chk_ass_${i}"
+                  ${s.assinatura?.marcado?"checked":""}
+                  onchange="aoClicarAssinatura('${t.id}',${i},this.checked)">
+                <label for="chk_ass_${i}" style="cursor:pointer;font-size:12px;">
+                  ${s.assinatura?.marcado
+                    ?`<span class="chk-ok">Assinado</span>`
+                    :`<span style="color:#aaa;">Pendente</span>`}
+                </label>
+              </div>
+              ${s.assinatura?.marcado?`
+                <span class="chk-resp">👤 ${escHtml(s.assinatura.responsavel||s.assinatura.usuario)}</span>
+                <span class="chk-info">${escHtml(s.assinatura.usuario)} &bull; ${formatarData(s.assinatura.data)}</span>
+              `:""}
+            </div>
+          </td>
+
+<!-- FINALIZADO -->
           <td>
             <div class="chk-cell">
               <div class="chk-row">
@@ -2016,6 +2088,72 @@ function desmarcarIniciado(ticketId, srvIdx){
   refreshTabelaSrv(idx);
   refreshHistorico(idx);
 }
+
+
+/* Clique no checkbox ASSINATURA */
+let _pendAssinatura = { ticketId:null, srvIdx:null };
+
+function aoClicarAssinatura(ticketId, srvIdx, marcado){
+  if(marcado){
+    _pendAssinatura = {ticketId, srvIdx};
+    const t   = tickets.find(x=>x.id===ticketId);
+    const srv = (t?.servicosTicket||[])[srvIdx];
+    document.getElementById("modalAssinaturaInfo").textContent =
+      `Serviço: "${srv?.nome||""}" — Ticket #${ticketId}`;
+    const todosResp = responsaveis.length
+      ? responsaveis
+      : usuarios.map(u=>({nome:u.nome,setor:""}));
+    document.getElementById("modalAssinaturaResp").innerHTML =
+      '<option value="">-- Selecione o responsável --</option>' +
+      todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+    document.getElementById("modalAssinatura").style.display="flex";
+  } else {
+    desmarcarAssinatura(ticketId, srvIdx);
+  }
+}
+
+function cancelarAssinatura(){
+  const {srvIdx} = _pendAssinatura;
+  const chk = document.getElementById("chk_ass_"+srvIdx);
+  if(chk) chk.checked = false;
+  _pendAssinatura = {ticketId:null,srvIdx:null};
+  fecharModal("modalAssinatura");
+}
+
+function confirmarAssinatura(){
+  const {ticketId,srvIdx} = _pendAssinatura;
+  if(!ticketId && srvIdx===null){ fecharModal("modalAssinatura"); return; }
+  const respVal = document.getElementById("modalAssinaturaResp").value.trim();
+  const responsavelNome = respVal.split(" (")[0];
+  if(!responsavelNome){ alert("Selecione o responsável."); return; }
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalAssinatura"); return; }
+  const srv = tickets[idx].servicosTicket[srvIdx];
+  const agr = agora();
+  srv.assinatura = { marcado:true, usuario:usuarioLogado.nome, responsavel:responsavelNome, data:agr };
+  const acao = `Serviço "${srv.nome}" ASSINADO — Responsável: ${responsavelNome}`;
+  _logHistorico(idx, acao);
+  tickets[idx].ultimaAtualizacao = agr;
+  salvar();
+  fecharModal("modalAssinatura");
+  _pendAssinatura={ticketId:null,srvIdx:null};
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+}
+
+function desmarcarAssinatura(ticketId, srvIdx){
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0)return;
+  const srv = tickets[idx].servicosTicket[srvIdx];
+  const nomeResp = srv.assinatura?.responsavel||"";
+  srv.assinatura = {marcado:false,usuario:"",responsavel:"",data:""};
+  _logHistorico(idx,`Serviço "${srv.nome}" desmarcado como assinado${nomeResp?` (era: ${nomeResp})`:""}`);
+  tickets[idx].ultimaAtualizacao = agora();
+  salvar();
+  refreshTabelaSrv(idx);
+  refreshHistorico(idx);
+}
+
 
 /* Clique no checkbox FINALIZADO */
 function aoClicarFinalizado(ticketId, srvIdx, marcado){
@@ -2148,8 +2286,9 @@ function adicionarSrvTicket(id){
   if(tickets[idx].servicosTicket.find(s=>s.nome===nome)){alert("Serviço já adicionado.");return;}
   tickets[idx].servicosTicket.push({
     nome,
-    iniciado:  {marcado:false,usuario:"",responsavel:"",obs:"",data:""},
-    finalizado:{marcado:false,usuario:"",data:""}
+    iniciado:   {marcado:false,usuario:"",responsavel:"",obs:"",data:""},
+    assinatura: {marcado:false,usuario:"",responsavel:"",data:""},
+    finalizado: {marcado:false,usuario:"",responsavel:"",obs:"",data:""}
   });
   _logHistorico(idx,`Serviço adicionado: "${nome}"`);
   salvar();
@@ -2287,6 +2426,107 @@ function confirmarAguardandoCliente(){
   verTicket(ticketId);
 }
 
+/* ============================================================
+   MODAL RETOMAR EM ANDAMENTO (AO SAIR DE AGUARDANDO CLIENTE)
+   ============================================================ */
+let _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
+
+function abrirModalRetomarAndamento(p){
+  // p: {ticketId, campos, obsNovo, statusAntigo}
+  _pendRetomarAndamento = {
+    ticketId: p.ticketId,
+    campos: p.campos || null,
+    obsNovo: p.obsNovo || "",
+    statusAntigo: p.statusAntigo || ""
+  };
+
+  const t = tickets.find(x=>x.id===p.ticketId);
+  document.getElementById("modalRetomarAndamentoInfo").textContent =
+    `Ticket #${p.ticketId} — "${t?.titulo||""}" | Cliente: ${t?.cliente||"?"}`;
+
+  const todosResp = responsaveis.length
+    ? responsaveis
+    : usuarios.map(u=>({nome:u.nome,setor:""}));
+  document.getElementById("modalRetomarAndamentoResp").innerHTML =
+    '<option value="">-- Selecione o responsável --</option>' +
+    todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+
+  const ta = document.getElementById("modalRetomarAndamentoTexto");
+  if(ta){
+    ta.value = "";
+    document.getElementById("contadorRetomarAndamento").textContent = "0";
+    ta.oninput = function(){
+      document.getElementById("contadorRetomarAndamento").textContent = this.value.length;
+    };
+  }
+
+  document.getElementById("modalRetomarAndamento").style.display="flex";
+}
+
+function cancelarRetomarAndamento(){
+  // restaura o select de status ao valor antigo para evitar inconsistência visual
+  try{
+    const t = tickets.find(x=>x.id===_pendRetomarAndamento.ticketId);
+    if(t) document.getElementById("vt_status").value = t.status;
+  }catch(e){}
+  _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
+  fecharModal("modalRetomarAndamento");
+}
+
+async function confirmarRetomarAndamento(){
+  const ticketId = _pendRetomarAndamento.ticketId;
+  if(!ticketId){ cancelarRetomarAndamento(); return; }
+
+  const respVal = (document.getElementById("modalRetomarAndamentoResp").value||"").trim();
+  const responsavelNome = respVal.split(" (")[0].trim();
+  if(!responsavelNome){ alert("Selecione o responsável."); return; }
+
+  const desc = (document.getElementById("modalRetomarAndamentoTexto").value||"").trim();
+  if(!desc){ alert("Informe a descrição da retomada."); return; }
+  if(desc.length > 500){ alert("Descrição excede 500 caracteres."); return; }
+
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){ fecharModal("modalRetomarAndamento"); return; }
+
+  const agr = agora();
+
+  // encerra a janela de aguardando cliente e limpa campos de pendência
+  finalizarAguardandoCliente(tickets[idx], agr);
+  tickets[idx].pendenciaCliente     = "";
+  tickets[idx].pendenciaClienteResp = "";
+  tickets[idx].pendenciaClienteData = "";
+
+  // aplica campos pendentes (capturados do formulário)
+  const c = _pendRetomarAndamento.campos || {};
+  Object.keys(c).forEach(k=>{ tickets[idx][k]=c[k]; });
+
+  // garante o status correto
+  tickets[idx].status = "Em andamento";
+
+  // registra a retomada
+  tickets[idx].retomadaEmAndamento = { responsavel: responsavelNome, descricao: desc, data: agr, usuario: usuarioLogado.nome };
+  _logHistorico(idx, `Status: "Aguardando cliente" → "Em andamento" — Responsável: ${responsavelNome} — Descrição: "${desc}"`, "retomada", {responsavel: responsavelNome});
+
+  tickets[idx].ultimaAtualizacao = agr;
+  await salvarTicket(tickets[idx]);
+
+  fecharModal("modalRetomarAndamento");
+
+  const obsNovo = (_pendRetomarAndamento.obsNovo||"").trim();
+  _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
+
+  if(obsNovo){
+    abrirModalObsInterna(idx, obsNovo, ()=>{
+      try{ document.getElementById("vt_obs").value=""; }catch(e){}
+      verTicket(ticketId);
+    });
+    return;
+  }
+
+  verTicket(ticketId);
+}
+
+
 
 /* ============================================================
    MODAL ENCERRAR TICKET
@@ -2352,14 +2592,24 @@ function abrirModalObsInterna(idx, texto, afterFn){
   abrirModal("modalObsInterna");
 }
 
-function confirmarModalObsInterna(){
+async function confirmarModalObsInterna(){
   const idx = _pendObsInterna.ticketIdx;
   const texto = (document.getElementById("modalObsTexto")?.value||_pendObsInterna.texto||"").trim();
   const resp = (document.getElementById("modalObsResp")?.value||"").trim();
 
   if(!resp){ alert("Selecione o responsável."); return; }
+  if(!texto){ alert("A observação não pode estar vazia."); return; }
+  if(texto.length > 500){ alert("Observação excede 500 caracteres."); return; }
 
   registrarObservacaoInterna(idx, texto, resp);
+
+  const agr = agora();
+  if(tickets[idx]){
+    tickets[idx].ultimaAtualizacao = agr;
+    await salvarTicket(tickets[idx]);
+  } else {
+    salvar(); // fallback
+  }
 
   fecharModal("modalObsInterna");
 
@@ -2511,15 +2761,36 @@ async function confirmarTransferencia(){
 async function atualizarTicket(id){
   const idx=tickets.findIndex(t=>t.id===id);
   if(idx<0)return;
-  const statusAntigo=tickets[idx].status;
-  const novoStatus  =document.getElementById("vt_status").value;
 
+  const statusAntigo = tickets[idx].status;
+  const novoStatus   = document.getElementById("vt_status").value;
+
+  // captura campos do formulário (para reaplicar em fluxos com modal)
+  const campos = {
+    titulo:      document.getElementById("vt_titulo").value.trim(),
+    cliente:     document.getElementById("vt_cliente").value.trim(),
+    cnpj:        (document.getElementById("vt_cnpj")?.value||"").trim(),
+    responsavel: document.getElementById("vt_responsavel").value,
+    prioridade:  document.getElementById("vt_prioridade").value,
+    status:      novoStatus
+  };
+
+  const obsNovo = (document.getElementById("vt_obs")?.value||"").trim();
+
+  // Entrando em "Aguardando cliente" abre modal específico
   if(novoStatus==="Aguardando cliente" && statusAntigo!=="Aguardando cliente"){
     _pendAguardandoCliente = { ticketId:id, statusAnterior:statusAntigo };
     abrirModalAguardandoCliente(id);
     return;
   }
 
+  // Saindo de "Aguardando cliente" para "Em andamento" exige responsável + descrição (máx 500) + data/hora
+  if(statusAntigo==="Aguardando cliente" && novoStatus==="Em andamento"){
+    abrirModalRetomarAndamento({ ticketId:id, campos, obsNovo, statusAntigo });
+    return;
+  }
+
+  // Saindo de "Aguardando cliente" para qualquer outro status: encerra período e limpa pendência
   if(statusAntigo==="Aguardando cliente" && novoStatus!=="Aguardando cliente"){
     finalizarAguardandoCliente(tickets[idx], agora());
     tickets[idx].pendenciaCliente     = "";
@@ -2527,28 +2798,27 @@ async function atualizarTicket(id){
     tickets[idx].pendenciaClienteData = "";
   }
 
-  tickets[idx].titulo     =document.getElementById("vt_titulo").value.trim();
-  tickets[idx].cliente    =document.getElementById("vt_cliente").value.trim();
-  tickets[idx].cnpj       =(document.getElementById("vt_cnpj")?.value||"").trim();
-  tickets[idx].responsavel=document.getElementById("vt_responsavel").value;
-  tickets[idx].prioridade =document.getElementById("vt_prioridade").value;
-  tickets[idx].status     =novoStatus;
-const obsNovo = (document.getElementById("vt_obs")?.value||"").trim();
-  if(obsNovo){
-    abrirModalObsInterna(idx, obsNovo, ()=>{
-      try{ document.getElementById("vt_obs").value=""; }catch(e){}
-      salvarTudo();
-      verTicket(id);
-    });
-    return;
-  }
-if(novoStatus!==statusAntigo){
+  // aplica campos normalmente
+  Object.keys(campos).forEach(k=> tickets[idx][k]=campos[k]);
+
+  if(novoStatus!==statusAntigo){
     _logHistorico(idx,`Status: "${statusAntigo}" → "${novoStatus}"`);
   } else {
     _logHistorico(idx,"Ticket atualizado");
   }
-  tickets[idx].ultimaAtualizacao=agora();
+
+  tickets[idx].ultimaAtualizacao = agora();
   await salvarTicket(tickets[idx]);
+
+  // Observações internas: abre modal e salva com responsável + data/hora
+  if(obsNovo){
+    abrirModalObsInterna(idx, obsNovo, ()=>{
+      try{ document.getElementById("vt_obs").value=""; }catch(e){}
+      verTicket(id);
+    });
+    return;
+  }
+
   verTicket(id);
 }
 
