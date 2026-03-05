@@ -927,6 +927,12 @@ function login(){
 
   atualizarSeletorVisao();
   mostrarTickets();
+  // Visão padrão ao acessar: clientes em aberto (Pendência do Cliente)
+  setTimeout(()=>{
+    const fa = document.getElementById("filtroAlerta");
+    if(fa) fa.value = "pend_cliente";
+    try{ filtrarTickets(); }catch(e){}
+  }, 0);
   _telaAtual="tickets";
   iniciarRealtime();
 }
@@ -2566,7 +2572,7 @@ function registrarObservacaoInterna(ticketId, texto, responsavelNome){
     usuario: (usuarioLogado && usuarioLogado.nome) ? usuarioLogado.nome : "",
     data: agora()
   });
-  _logHistorico(idx, `Observação registrada — Responsável: ${responsavelNome}`, "observacao", { responsavel: responsavelNome });
+  _logHistorico(idx, `Observação interna registrada`, "observacao", { responsavel: responsavelNome, detalhe: texto });
 }
 
 function abrirModalObsInterna(ticketIdOrIdx, texto, afterFn){
@@ -2704,6 +2710,7 @@ function renderHistorico(hist){
         ${isPendCliente?'<span style="background:#e91e8c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">PEND. CLIENTE</span>':""}
         — ${escHtml(h.acao)}
         <span style="color:#888;float:right;font-size:11px;">${formatarData(h.data)}</span>
+        ${h.detalhe?`<div style="margin-top:4px;white-space:pre-wrap;color:#333;">${escHtml(h.detalhe)}</div>`:""}
       </div>`;
   }).join("");
 }
@@ -2832,8 +2839,21 @@ async function atualizarTicket(id){
   tickets[idx].ultimaAtualizacao = agora();
   await salvarTicket(tickets[idx]);
 
-  // Observações internas: abre modal e salva com responsável + data/hora
+  // Observações internas: registra com responsável + data/hora
   if(obsNovo){
+    // Se já existir responsável no ticket, registra automaticamente (sem modal)
+    const respAuto = (tickets[idx].responsavel||"").trim();
+    if(respAuto){
+      registrarObservacaoInterna(id, obsNovo, respAuto);
+      // garante persistência imediata
+      tickets[idx].ultimaAtualizacao = agora();
+      await salvarTicket(tickets[idx]);
+      try{ document.getElementById("vt_obs").value=""; }catch(e){}
+      verTicket(id);
+      return;
+    }
+
+    // Caso não haja responsável definido, pede via modal
     abrirModalObsInterna(id, obsNovo, ()=>{
       try{ document.getElementById("vt_obs").value=""; }catch(e){}
       verTicket(id);
