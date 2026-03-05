@@ -2410,7 +2410,7 @@ function confirmarAguardandoCliente(){
 
   // Se houver observação interna preenchida, registra com responsável antes de salvar
   if(obsNovo){
-    abrirModalObsInterna(idx, obsNovo, ()=>{
+    abrirModalObsInterna(ticketId, obsNovo, ()=>{
       try{ const el=document.getElementById("vt_obs"); if(el) el.value=""; }catch(e){}
       salvar();
       fecharModal("modalAguardandoCliente");
@@ -2516,7 +2516,7 @@ async function confirmarRetomarAndamento(){
   _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
 
   if(obsNovo){
-    abrirModalObsInterna(idx, obsNovo, ()=>{
+    abrirModalObsInterna(ticketId, obsNovo, ()=>{
       try{ document.getElementById("vt_obs").value=""; }catch(e){}
       verTicket(ticketId);
     });
@@ -2552,10 +2552,13 @@ function abrirModalEncerrarTicket(id){
   document.getElementById("modalEncerrarTicket").style.display="flex";
 }
 
-let _pendObsInterna = { ticketIdx:null, texto:"", after:null };
+let _pendObsInterna = { ticketId:null, texto:"", after:null };
 
-function registrarObservacaoInterna(idx, texto, responsavelNome){
-  if(idx==null || !tickets[idx]) return;
+function registrarObservacaoInterna(ticketId, texto, responsavelNome){
+  if(!ticketId) return;
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx==null || idx<0 || !tickets[idx]) return;
+
   if(!tickets[idx].observacoes) tickets[idx].observacoes = [];
   tickets[idx].observacoes.push({
     texto: texto || "",
@@ -2566,8 +2569,18 @@ function registrarObservacaoInterna(idx, texto, responsavelNome){
   _logHistorico(idx, `Observação registrada — Responsável: ${responsavelNome}`, "observacao", { responsavel: responsavelNome });
 }
 
-function abrirModalObsInterna(idx, texto, afterFn){
-  _pendObsInterna = { ticketIdx: idx, texto: texto || "", after: (typeof afterFn==="function") ? afterFn : null };
+function abrirModalObsInterna(ticketIdOrIdx, texto, afterFn){
+  // ⚠️ Importante: guardar o ID do ticket (e não o índice),
+  // pois a lista pode mudar por atualizações em tempo real.
+  let ticketId = null;
+  if(typeof ticketIdOrIdx === "number"){
+    ticketId = tickets[ticketIdOrIdx]?.id || null;
+  } else {
+    ticketId = ticketIdOrIdx;
+  }
+  if(!ticketId) return;
+
+  _pendObsInterna = { ticketId, texto: texto || "", after: (typeof afterFn==="function") ? afterFn : null };
 
   const sel = document.getElementById("modalObsResp");
   if(sel){
@@ -2593,7 +2606,7 @@ function abrirModalObsInterna(idx, texto, afterFn){
 }
 
 async function confirmarModalObsInterna(){
-  const idx = _pendObsInterna.ticketIdx;
+  const ticketId = _pendObsInterna.ticketId;
   const texto = (document.getElementById("modalObsTexto")?.value||_pendObsInterna.texto||"").trim();
   const resp = (document.getElementById("modalObsResp")?.value||"").trim();
 
@@ -2601,7 +2614,15 @@ async function confirmarModalObsInterna(){
   if(!texto){ alert("A observação não pode estar vazia."); return; }
   if(texto.length > 500){ alert("Observação excede 500 caracteres."); return; }
 
-  registrarObservacaoInterna(idx, texto, resp);
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){
+    alert("Ticket não encontrado (pode ter sido atualizado em tempo real). Abra o ticket novamente e tente de novo.");
+    fecharModal("modalObsInterna");
+    _pendObsInterna = { ticketId:null, texto:"", after:null };
+    return;
+  }
+
+  registrarObservacaoInterna(ticketId, texto, resp);
 
   const agr = agora();
   if(tickets[idx]){
@@ -2614,10 +2635,11 @@ async function confirmarModalObsInterna(){
   fecharModal("modalObsInterna");
 
   const after = _pendObsInterna.after;
-  _pendObsInterna = { ticketIdx:null, texto:"", after:null };
+  _pendObsInterna = { ticketId:null, texto:"", after:null };
 
   if(typeof after === "function") after();
 }
+
 
 
 function cancelarEncerramento(){
@@ -2812,7 +2834,7 @@ async function atualizarTicket(id){
 
   // Observações internas: abre modal e salva com responsável + data/hora
   if(obsNovo){
-    abrirModalObsInterna(idx, obsNovo, ()=>{
+    abrirModalObsInterna(id, obsNovo, ()=>{
       try{ document.getElementById("vt_obs").value=""; }catch(e){}
       verTicket(id);
     });
