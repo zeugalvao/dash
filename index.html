@@ -467,27 +467,6 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 
 
 <!-- ============================================================
-     MODAL: OBSERVAÇÃO INTERNA (RESPONSÁVEL)
-     ============================================================ -->
-<div id="modalObsInterna" class="modal-overlay" style="display:none;">
-  <div class="modal-box" style="max-width:560px;">
-    <h3>📝 Registrar Observação Interna</h3>
-    <p style="font-size:13px;color:#555;margin-top:-6px;">Selecione o responsável para registrar a observação com data e hora.</p>
-
-    <label style="display:block;margin-top:10px;"><b>Responsável *</b></label>
-    <select id="modalObsResp" style="margin:6px 0 10px;"></select>
-
-    <label style="display:block;"><b>Observação</b></label>
-    <textarea id="modalObsTexto" rows="4" readonly style="margin:6px 0 10px;resize:vertical;background:#f7f7f7;"></textarea>
-
-    <div class="modal-actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
-      <button class="btn-dark" onclick="fecharModal('modalObsInterna')">Cancelar</button>
-      <button class="btn-primary" onclick="confirmarModalObsInterna()">Registrar</button>
-    </div>
-  </div>
-</div>
-
-<!-- ============================================================
      MODAL: BACKUP / RESTAURAR
      ============================================================ -->
 <div id="modalBackup" class="modal-overlay" style="display:none;">
@@ -927,10 +906,10 @@ function login(){
 
   atualizarSeletorVisao();
   mostrarTickets();
-  // Visão padrão ao acessar: clientes em aberto (Pendência do Cliente)
+  // Visão padrão ao acessar: Em aberto
   setTimeout(()=>{
     const fa = document.getElementById("filtroAlerta");
-    if(fa) fa.value = "pend_cliente";
+    if(fa) fa.value = "abertos";
     try{ filtrarTickets(); }catch(e){}
   }, 0);
   _telaAtual="tickets";
@@ -1658,10 +1637,6 @@ function novoTicket(){
           </div>
           <div id="nt_srv_lista"></div>
         </div>
-<div style="grid-column:1/-1;">
-          <label><b>Observações Internas</b></label>
-          <textarea id="nt_obs" rows="2" placeholder="Notas internas (não visível ao cliente)"></textarea>
-        </div>
       </div>
       <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;">
         <button class="btn-success" onclick="salvarNovoTicket()">✔ Criar Ticket</button>
@@ -1715,21 +1690,12 @@ async function salvarNovoTicket(){
   const status     =document.getElementById("nt_status").value;
   const canal      =document.getElementById("nt_canal").value;
   const descricao  = "";
-const obs        =document.getElementById("nt_obs").value.trim();
-
+const obs        = "";
   if(!titulo) {alert("Selecione o título.");document.getElementById("nt_titulo").focus();return;}
   if(!cliente){alert("Informe o cliente.");document.getElementById("nt_cliente").focus();return;}
   if(!setor)  {alert("Selecione o setor.");document.getElementById("nt_setor").focus();return;}
 
   const agr = agora();
-  // Observação interna com responsável + data/hora
-  let obsEntry = null;
-  if(obs){
-    const respObs = prompt("Informe o responsável pela observação (obrigatório):","") || "";
-    const respObsTrim = respObs.trim();
-    if(!respObsTrim){ alert("Responsável é obrigatório para registrar observação."); return; }
-    obsEntry = { texto: obs, responsavel: respObsTrim, usuario: usuarioLogado.nome, data: agr };
-  }
   const ticket={
     id:gerarId(), titulo,cliente,cnpj,setor,responsavel,prioridade,status,canal,descricao,obs,
     abertoPor:usuarioLogado.nome,
@@ -1738,12 +1704,11 @@ const obs        =document.getElementById("nt_obs").value.trim();
     dataChegadaCredenciamento:(setor||'').toLowerCase().includes('credenci') ? agr : null,
     dataTransferenciaComercial:(setor||'').toLowerCase().includes('comercial') ? agr : null,
     servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),
-    observacoes: obsEntry ? [obsEntry] : [],
+    observacoes: [],
     aguardandoClienteAcumuladoMs: 0,
     aguardandoClienteInicio: null,
     encerramento: null,
-    historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}].concat(obsEntry?[{acao:`Observação registrada — Responsável: ${obsEntry.responsavel}`,usuario:usuarioLogado.nome,data:agr,tipo:"observacao"}]:[])
-  };
+    historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]};
   tickets.unshift(ticket);
   await salvarTicket(ticket);
   _srvTemp=[];
@@ -1916,14 +1881,21 @@ function verTicket(id, _realtimeRefresh=false){
             <div id="tabelaSrvWrap">${renderTabelaServicosTicket(t)}</div>
           </div>
         </div>
-<div style="grid-column:1/-1;">
-          <label><b>Observações Internas</b></label>
-          <textarea id="vt_obs" rows="2" placeholder="Digite uma observação interna e clique em Salvar Alterações para registrar no histórico..."></textarea>
-          <div id="vt_obs_lista" style="margin-top:8px;">${renderObservacoesInternas(t)}</div>
+      </div>
+
+      
+      <!-- Informações adicionais -->
+      <div class="card" style="max-width:780px;margin-top:14px;">
+        <h3 style="margin-top:0;">📝 Informações Adicionais</h3>
+        <textarea id="vt_info_adicionais" rows="3" style="resize:vertical;"
+          placeholder="Escreva aqui informações adicionais sobre o ticket..."></textarea>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+          <button class="btn-primary" onclick="abrirModalInfoAdd('${t.id}')">📝 Gravar Informações</button>
+          <span style="font-size:12px;color:#666;">Ao gravar, será registrado no histórico com responsável + data/hora.</span>
         </div>
       </div>
 
-      <div class="ticket-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
+<div class="ticket-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-primary" onclick="atualizarTicket('${t.id}')">💾 Salvar Alterações</button>
         <button class="btn-purple"  onclick="abrirModalTransf('${t.id}')">🔀 Transferir Setor</button>
         <button class="btn-danger"  onclick="abrirModalEncerrarTicket('${t.id}')">✅ Encerrar Ticket</button>
@@ -2401,9 +2373,6 @@ function confirmarAguardandoCliente(){
   tickets[idx].cnpj        = (document.getElementById("vt_cnpj")?.value || "").trim() || tickets[idx].cnpj;
   tickets[idx].responsavel = document.getElementById("vt_responsavel")?.value || tickets[idx].responsavel;
   tickets[idx].prioridade  = document.getElementById("vt_prioridade")?.value || tickets[idx].prioridade;
-
-  const obsNovo = (document.getElementById("vt_obs")?.value || "").trim();
-
   tickets[idx].status = "Aguardando cliente";
   iniciarAguardandoCliente(tickets[idx], agr);
 
@@ -2414,18 +2383,6 @@ function confirmarAguardandoCliente(){
   _logHistorico(idx, `Status: "${statusAnterior||"?"}" → "Aguardando cliente" — Responsável: ${responsavelNome} — Pendência: "${texto}"`);
   tickets[idx].ultimaAtualizacao = agr;
 
-  // Se houver observação interna preenchida, registra com responsável antes de salvar
-  if(obsNovo){
-    abrirModalObsInterna(ticketId, obsNovo, ()=>{
-      try{ const el=document.getElementById("vt_obs"); if(el) el.value=""; }catch(e){}
-      salvar();
-      fecharModal("modalAguardandoCliente");
-      _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
-      verTicket(ticketId);
-    });
-    return;
-  }
-
   salvar();
   fecharModal("modalAguardandoCliente");
   _pendAguardandoCliente = { ticketId:null, statusAnterior:null };
@@ -2435,15 +2392,14 @@ function confirmarAguardandoCliente(){
 /* ============================================================
    MODAL RETOMAR EM ANDAMENTO (AO SAIR DE AGUARDANDO CLIENTE)
    ============================================================ */
-let _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
+let _pendRetomarAndamento = { ticketId:null, campos:null, statusAntigo:"" };
 
 function abrirModalRetomarAndamento(p){
-  // p: {ticketId, campos, obsNovo, statusAntigo}
+  // p: {ticketId, campos, statusAntigo}
   _pendRetomarAndamento = {
     ticketId: p.ticketId,
     campos: p.campos || null,
-    obsNovo: p.obsNovo || "",
-    statusAntigo: p.statusAntigo || ""
+statusAntigo: p.statusAntigo || ""
   };
 
   const t = tickets.find(x=>x.id===p.ticketId);
@@ -2475,7 +2431,7 @@ function cancelarRetomarAndamento(){
     const t = tickets.find(x=>x.id===_pendRetomarAndamento.ticketId);
     if(t) document.getElementById("vt_status").value = t.status;
   }catch(e){}
-  _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
+  _pendRetomarAndamento = { ticketId:null, campos:null, statusAntigo:"" };
   fecharModal("modalRetomarAndamento");
 }
 
@@ -2517,20 +2473,9 @@ async function confirmarRetomarAndamento(){
   await salvarTicket(tickets[idx]);
 
   fecharModal("modalRetomarAndamento");
-
-  const obsNovo = (_pendRetomarAndamento.obsNovo||"").trim();
-  _pendRetomarAndamento = { ticketId:null, campos:null, obsNovo:"", statusAntigo:"" };
-
-  if(obsNovo){
-    abrirModalObsInterna(ticketId, obsNovo, ()=>{
-      try{ document.getElementById("vt_obs").value=""; }catch(e){}
-      verTicket(ticketId);
-    });
-    return;
-  }
-
   verTicket(ticketId);
 }
+
 
 
 
@@ -2557,95 +2502,6 @@ function abrirModalEncerrarTicket(id){
   };
   document.getElementById("modalEncerrarTicket").style.display="flex";
 }
-
-let _pendObsInterna = { ticketId:null, texto:"", after:null };
-
-function registrarObservacaoInterna(ticketId, texto, responsavelNome){
-  if(!ticketId) return;
-  const idx = tickets.findIndex(t=>t.id===ticketId);
-  if(idx==null || idx<0 || !tickets[idx]) return;
-
-  if(!tickets[idx].observacoes) tickets[idx].observacoes = [];
-  tickets[idx].observacoes.push({
-    texto: texto || "",
-    responsavel: responsavelNome || "",
-    usuario: (usuarioLogado && usuarioLogado.nome) ? usuarioLogado.nome : "",
-    data: agora()
-  });
-  _logHistorico(idx, `Observação interna registrada`, "observacao", { responsavel: responsavelNome, detalhe: texto });
-}
-
-function abrirModalObsInterna(ticketIdOrIdx, texto, afterFn){
-  // ⚠️ Importante: guardar o ID do ticket (e não o índice),
-  // pois a lista pode mudar por atualizações em tempo real.
-  let ticketId = null;
-  if(typeof ticketIdOrIdx === "number"){
-    ticketId = tickets[ticketIdOrIdx]?.id || null;
-  } else {
-    ticketId = ticketIdOrIdx;
-  }
-  if(!ticketId) return;
-
-  _pendObsInterna = { ticketId, texto: texto || "", after: (typeof afterFn==="function") ? afterFn : null };
-
-  const sel = document.getElementById("modalObsResp");
-  if(sel){
-    sel.innerHTML = "";
-    const o0 = document.createElement("option");
-    o0.value = "";
-    o0.textContent = "Selecione...";
-    sel.appendChild(o0);
-
-    const lista = (responsaveis||[]).slice().sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR"));
-    lista.forEach(r=>{
-      const o=document.createElement("option");
-      o.value = (r.nome||"");
-      o.textContent = (r.nome||"") + (r.setor ? ` (${r.setor})` : "");
-      sel.appendChild(o);
-    });
-  }
-
-  const tx = document.getElementById("modalObsTexto");
-  if(tx) tx.value = texto || "";
-
-  abrirModal("modalObsInterna");
-}
-
-async function confirmarModalObsInterna(){
-  const ticketId = _pendObsInterna.ticketId;
-  const texto = (document.getElementById("modalObsTexto")?.value||_pendObsInterna.texto||"").trim();
-  const resp = (document.getElementById("modalObsResp")?.value||"").trim();
-
-  if(!resp){ alert("Selecione o responsável."); return; }
-  if(!texto){ alert("A observação não pode estar vazia."); return; }
-  if(texto.length > 500){ alert("Observação excede 500 caracteres."); return; }
-
-  const idx = tickets.findIndex(t=>t.id===ticketId);
-  if(idx<0){
-    alert("Ticket não encontrado (pode ter sido atualizado em tempo real). Abra o ticket novamente e tente de novo.");
-    fecharModal("modalObsInterna");
-    _pendObsInterna = { ticketId:null, texto:"", after:null };
-    return;
-  }
-
-  registrarObservacaoInterna(ticketId, texto, resp);
-
-  const agr = agora();
-  if(tickets[idx]){
-    tickets[idx].ultimaAtualizacao = agr;
-    await salvarTicket(tickets[idx]);
-  } else {
-    salvar(); // fallback
-  }
-
-  fecharModal("modalObsInterna");
-
-  const after = _pendObsInterna.after;
-  _pendObsInterna = { ticketId:null, texto:"", after:null };
-
-  if(typeof after === "function") after();
-}
-
 
 
 function cancelarEncerramento(){
@@ -2719,21 +2575,6 @@ function renderHistorico(hist){
 /* ============================================================
    MODAL GERAL
    ============================================================ */
-function renderObservacoesInternas(t){
-  const obs = (t && t.observacoes) ? t.observacoes : [];
-  if(!obs || !obs.length) return '<p style="color:#aaa;font-size:12px;">Nenhuma observação interna registrada.</p>';
-  return obs.slice().reverse().map(o=>{
-    const resp = escHtml(o.responsavel || o.usuario || "-");
-    const data = formatarData(o.data);
-    const texto = escHtml(o.texto || "");
-    return `
-      <div class="hist-row" style="background:#fff8e1;border-left:3px solid #ffb300;padding-left:8px;">
-        <b>${resp}</b> <span style="font-size:11px;color:#666;">${data}</span>
-        <div style="margin-top:4px;white-space:pre-wrap;">${texto}</div>
-      </div>
-    `;
-  }).join("");
-}
 
 
 function fecharModal(id){
@@ -2803,9 +2644,6 @@ async function atualizarTicket(id){
     prioridade:  document.getElementById("vt_prioridade").value,
     status:      novoStatus
   };
-
-  const obsNovo = (document.getElementById("vt_obs")?.value||"").trim();
-
   // Entrando em "Aguardando cliente" abre modal específico
   if(novoStatus==="Aguardando cliente" && statusAntigo!=="Aguardando cliente"){
     _pendAguardandoCliente = { ticketId:id, statusAnterior:statusAntigo };
@@ -2815,7 +2653,7 @@ async function atualizarTicket(id){
 
   // Saindo de "Aguardando cliente" para "Em andamento" exige responsável + descrição (máx 500) + data/hora
   if(statusAntigo==="Aguardando cliente" && novoStatus==="Em andamento"){
-    abrirModalRetomarAndamento({ ticketId:id, campos, obsNovo, statusAntigo });
+    abrirModalRetomarAndamento({ ticketId:id, campos, statusAntigo });
     return;
   }
 
@@ -2838,31 +2676,9 @@ async function atualizarTicket(id){
 
   tickets[idx].ultimaAtualizacao = agora();
   await salvarTicket(tickets[idx]);
-
-  // Observações internas: registra com responsável + data/hora
-  if(obsNovo){
-    // Se já existir responsável no ticket, registra automaticamente (sem modal)
-    const respAuto = (tickets[idx].responsavel||"").trim();
-    if(respAuto){
-      registrarObservacaoInterna(id, obsNovo, respAuto);
-      // garante persistência imediata
-      tickets[idx].ultimaAtualizacao = agora();
-      await salvarTicket(tickets[idx]);
-      try{ document.getElementById("vt_obs").value=""; }catch(e){}
-      verTicket(id);
-      return;
-    }
-
-    // Caso não haja responsável definido, pede via modal
-    abrirModalObsInterna(id, obsNovo, ()=>{
-      try{ document.getElementById("vt_obs").value=""; }catch(e){}
-      verTicket(id);
-    });
-    return;
-  }
-
   verTicket(id);
 }
+
 
 async function excluirTicket(id){
   // Apenas ADM pode excluir
@@ -2893,6 +2709,79 @@ function _logHistorico(idx,acao,tipo="sistema",meta={}){
   }
   tickets[idx].historico.push(entry);
 }
+
+
+/* ============================================================
+   INFORMAÇÕES ADICIONAIS (registro no histórico)
+   ============================================================ */
+let _infoAddPend = { ticketId:null, texto:"" };
+
+function abrirModalInfoAdd(ticketId){
+  const ta = document.getElementById("vt_info_adicionais");
+  const texto = (ta?.value||"").trim();
+  if(!texto){
+    alert("Digite as INFORMAÇÕES ADICIONAIS antes de gravar.");
+    return;
+  }
+  _infoAddPend = { ticketId, texto };
+
+  // popula responsáveis
+  const sel = document.getElementById("modalInfoAddResp");
+  if(sel){
+    sel.innerHTML = '<option value="">Selecione...</option>' + (responsaveis||[])
+      .map(r=>`<option value="${escHtml(r.nome)}">${escHtml(r.nome)}</option>`).join("");
+  }
+  const prev = document.getElementById("modalInfoAddPreview");
+  if(prev) prev.textContent = texto;
+
+  const md = document.getElementById("modalInfoAdd");
+  if(md) md.style.display = "flex";
+}
+
+function cancelarInfoAdd(){
+  const md = document.getElementById("modalInfoAdd");
+  if(md) md.style.display = "none";
+  _infoAddPend = { ticketId:null, texto:"" };
+}
+
+async function confirmarInfoAdd(){
+  const resp = (document.getElementById("modalInfoAddResp")?.value||"").trim();
+  if(!resp){
+    alert("Selecione o responsável.");
+    return;
+  }
+  const { ticketId, texto } = _infoAddPend;
+  if(!ticketId || !texto){
+    cancelarInfoAdd();
+    return;
+  }
+
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){
+    alert("Ticket não encontrado. Recarregue a lista e tente novamente.");
+    cancelarInfoAdd();
+    return;
+  }
+
+  // Registra no histórico com detalhe (texto completo)
+  _logHistorico(idx, "Informações adicionais registradas", "info_adicional", {
+    responsavel: resp,
+    detalhe: texto
+  });
+
+  // Atualiza timestamp do ticket e salva
+  tickets[idx].ultimaAtualizacao = agora();
+  await salvarTicket(tickets[idx]);
+
+  // Limpa campo e fecha modal
+  const ta = document.getElementById("vt_info_adicionais");
+  if(ta) ta.value = "";
+  cancelarInfoAdd();
+
+  // Reabre a visualização do ticket para refletir no histórico
+  verTicket(ticketId);
+}
+
 function gerarId(){
   // ID numérico (inteiro) sequencial
   const ids = (tickets||[]).map(t=>String(t.id||"").trim());
@@ -3665,5 +3554,32 @@ carregarDadosFirebase().then(() => {
     '<p style="color:#999;">Detalhes no console (F12)</p></div>';
 });
 </script>
+
+<!-- ============================================================
+     MODAL: INFORMAÇÕES ADICIONAIS
+     ============================================================ -->
+<div class="modal-backdrop" id="modalInfoAdd" style="display:none;">
+  <div class="modal">
+    <h3 style="margin-top:0;">📝 Gravar Informações Adicionais</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:10px;">
+      Selecione o responsável para registrar no histórico (data/hora serão gravadas automaticamente).
+    </p>
+
+    <label style="display:block;margin-top:6px;"><b>Responsável:</b></label>
+    <select id="modalInfoAddResp" style="margin:6px 0 10px;"></select>
+
+    <div style="margin-top:8px;">
+      <div style="font-size:12px;color:#666;margin-bottom:6px;"><b>Conteúdo a registrar:</b></div>
+      <div id="modalInfoAddPreview" style="white-space:pre-wrap;border:1px solid #e5e7eb;background:#f9fafb;padding:10px;border-radius:10px;max-height:180px;overflow:auto;"></div>
+    </div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+      <button class="btn-success" onclick="confirmarInfoAdd()">✔ Confirmar</button>
+      <button class="btn-dark" onclick="cancelarInfoAdd()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+
 </body>
 </html>
