@@ -167,7 +167,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 
   /* Tabela serviços scrollável */
   .srv-table-wrap{overflow-x:auto;}
-  .srv-table{min-width:520px;}
+  .srv-table{min-width:780px;}
 
   /* Botões de ação ticket */
   .ticket-actions{flex-wrap:wrap!important;gap:6px!important;}
@@ -373,6 +373,29 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <div style="display:flex;gap:8px;">
       <button class="btn-warning" style="color:#000;" onclick="confirmarAtualizacao()">📝 Registrar Atualização</button>
       <button class="btn-dark"    onclick="fecharModal('modalAtualizacao')">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MODAL: ATUALIZAÇÃO 48H POR SERVIÇO
+     ============================================================ -->
+<div id="modalAtualizacaoServico" class="modal-overlay" style="display:none;">
+  <div class="modal-box">
+    <h3>🕐 Atualização do Serviço</h3>
+    <p id="modalAtualizacaoServicoInfo" style="font-size:13px;color:#555;margin-bottom:4px;"></p>
+    <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#856404;">
+      📝 O responsável, data e hora serão gravados automaticamente na atualização deste serviço.
+    </div>
+    <label style="display:block;margin-top:6px;"><b>Responsável:</b></label>
+    <select id="modalAtualizacaoServicoResp" style="margin:6px 0 8px;"></select>
+    <label style="display:block;font-size:12px;color:#666;"><b>Descrição da atualização *</b></label>
+    <textarea id="modalAtualizacaoServicoTexto" rows="3"
+      style="margin:4px 0 16px;resize:vertical;"
+      placeholder="Descreva o andamento deste serviço..."></textarea>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-warning" style="color:#000;" onclick="confirmarAtualizacaoServico()">📝 Registrar Atualização</button>
+      <button class="btn-dark" onclick="fecharModal('modalAtualizacaoServico')">Fechar</button>
     </div>
   </div>
 </div>
@@ -995,7 +1018,9 @@ function horasDesdeUltimaAtualizacao(t){
 function precisaAtualizacao48h(t){
   if(t.status === "Concluído" || t.status === "Encerrado" || t.status === "Cancelado") return false;
   if(!temServicoIniciado(t)) return false;
-  return horasDesdeUltimaAtualizacao(t) >= 48;
+  // Ticket precisa atualização se QUALQUER serviço iniciado (não finalizado) está há 48h+ sem update
+  const srvs = t.servicosTicket || [];
+  return srvs.some(s => servicoPrecisaAtualizacao48h(t, s)) || horasDesdeUltimaAtualizacao(t) >= 48;
 }
 function estaEmAberto(t){
   if(t.status==="Concluído"||t.status==="Encerrado"||t.status==="Cancelado") return false;
@@ -1512,6 +1537,21 @@ function renderListaTickets(lista){
       ?`<span style="font-size:11px;color:#4e73df;margin-left:4px;">📦 ${qtdFin}/${srvs.length} finalizados</span>`
       :"";
 
+    // Conta serviços com SLA atrasado
+    const srvAtrasados = srvs.filter(s => {
+      const si = calcularSLAServico(t, s);
+      return si && si.atrasado;
+    });
+    const srvAtrasadoBadge = srvAtrasados.length > 0
+      ? `<span style="font-size:10px;color:#e74a3b;font-weight:700;margin-left:4px;">⚠ ${srvAtrasados.length} srv. atrasado(s)</span>`
+      : "";
+
+    // Conta serviços precisando de atualização 48h
+    const srv48h = srvs.filter(s => servicoPrecisaAtualizacao48h(t, s));
+    const srv48hBadge = srv48h.length > 0
+      ? `<span style="font-size:10px;color:#856404;background:#fff3cd;padding:1px 6px;border-radius:8px;margin-left:4px;">⏰ ${srv48h.length} srv. aguard. atualiz.</span>`
+      : "";
+
     let estadoBadge = "";
     if(atrasoComercial){
       const hCom = Math.round(horasDesdeTransferenciaComercial(t));
@@ -1541,7 +1581,7 @@ function renderListaTickets(lista){
             <span style="font-size:12px;color:#666;">${escHtml(t.cliente||"")} &bull; ${escHtml(t.setor||"")} &bull; ${escHtml(t.responsavel||"Sem responsável")}</span>
             ${elegivelEncerrarPorFaltaResposta(t)?`<span class="tag-eligivel">TICKET ELEGÍVEL PARA SER ENCERRADO POR FALTA DE RESPOSTA DO CLIENTE</span>`:""}
             <div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
-              ${srvBadge}${estadoBadge}
+              ${srvBadge}${srvAtrasadoBadge}${srv48hBadge}${estadoBadge}
             </div>
           </div>
           <div style="text-align:right;flex-shrink:0;">
@@ -1812,6 +1852,10 @@ function verTicket(id, _realtimeRefresh=false){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="grid-2col">
 
         <div style="grid-column:1/-1;">
+          <label><b>Nome Fantasia *</b></label>
+          <input id="vt_cliente" value="${escHtml(t.cliente||"")}" style="font-size:15px;font-weight:600;">
+        </div>
+        <div style="grid-column:1/-1;">
           <label><b>Título</b></label>
           <select id="vt_titulo">
             ${["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].map(opt=>{
@@ -1822,10 +1866,6 @@ function verTicket(id, _realtimeRefresh=false){
           ${(["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].includes(t.titulo)) ? "" : `<div style="margin-top:6px;font-size:11px;color:#b07a00;background:#fff3cd;border:1px solid #ffeeba;padding:6px;border-radius:6px;">
             Título legado deste ticket: <b>${escHtml(t.titulo||"")}</b> (ao salvar, será padronizado para uma das opções acima)
           </div>`}
-        </div>
-        <div>
-          <label><b>Nome Fantasia</b></label>
-          <input id="vt_cliente" value="${escHtml(t.cliente||"")}">
         </div>
         <div>
           <label><b>CNPJ / CPF</b></label>
@@ -1924,14 +1964,43 @@ function renderTabelaServicosTicket(t){
     <table class="srv-table">
       <tr>
         <th>Serviço</th>
+        <th style="text-align:center;width:120px;">SLA</th>
         <th style="text-align:center;width:170px;">✅ Iniciado</th>
         <th style="text-align:center;width:170px;">✍️ Assinatura</th>
         <th style="text-align:center;width:170px;">🏁 Finalizado</th>
+        <th style="text-align:center;width:100px;">📝 Atualiz.</th>
         <th style="width:70px;"></th>
       </tr>
-      ${srvs.map((s,i)=>`
-        <tr>
-          <td><b>${escHtml(s.nome)}</b></td>
+      ${srvs.map((s,i)=>{
+        const slaInfo = calcularSLAServico(t, s);
+        const precisa48 = servicoPrecisaAtualizacao48h(t, s);
+        const hDesde48  = horasDesdeUltimaAtualizacaoServico(s, t);
+        const rowBg = precisa48 ? 'background:#fffde7;' : (slaInfo && slaInfo.atrasado ? 'background:#fff8f8;' : '');
+        const sc = servicosCadastro.find(c => c.nome === s.nome);
+        const slaHoras = sc ? sc.sla : null;
+
+        // Histórico de atualizações do serviço
+        const atualizacoes = s.atualizacoes || [];
+        const ultimaAtualiz = atualizacoes.length ? atualizacoes[atualizacoes.length-1] : null;
+
+        return `
+        <tr style="${rowBg}">
+          <td>
+            <b>${escHtml(s.nome)}</b>
+            ${slaHoras ? `<div style="font-size:10px;color:#888;">SLA: ${slaHoras}h</div>` : ''}
+          </td>
+
+          <!-- SLA INDIVIDUAL -->
+          <td style="text-align:center;">
+            ${slaInfo ? `
+              <div style="background:#eee;border-radius:4px;height:6px;overflow:hidden;margin:2px 0;">
+                <div style="width:${slaInfo.porcentagem}%;background:${slaInfo.atrasado?'#e74a3b':slaInfo.porcentagem>75?'#f6c23e':'#1cc88a'};height:100%;"></div>
+              </div>
+              ${slaInfo.atrasado
+                ? `<span style="color:#e74a3b;font-size:10px;font-weight:700;">⚠ ${Math.abs(slaInfo.horas).toFixed(1)}h atraso</span>`
+                : `<span style="color:#666;font-size:10px;">${slaInfo.horas.toFixed(1)}h rest.</span>`}
+            ` : (s.finalizado?.marcado ? '<span style="color:#1cc88a;font-size:10px;">✅ Concluído</span>' : '<span style="color:#aaa;font-size:10px;">—</span>')}
+          </td>
 
           <!-- INICIADO -->
           <td>
@@ -1996,11 +2065,30 @@ function renderTabelaServicosTicket(t){
             </div>
           </td>
 
+          <!-- ATUALIZAÇÃO 48H POR SERVIÇO -->
+          <td style="text-align:center;">
+            ${s.iniciado?.marcado && !s.finalizado?.marcado ? `
+              ${precisa48 ? `
+                <div class="alerta-48h" style="font-size:10px;margin-bottom:4px;">⏰ ${Math.round(hDesde48)}h</div>
+                <button class="btn-warning" style="font-size:10px;padding:3px 6px;color:#000;" onclick="abrirModalAtualizacaoServico('${t.id}',${i})">Atualizar</button>
+              ` : `
+                <span style="font-size:10px;color:#1cc88a;">✅ OK</span>
+                <div style="font-size:9px;color:#888;">${Math.round(hDesde48)}h atrás</div>
+              `}
+              ${ultimaAtualiz ? `
+                <div style="font-size:9px;color:#4e73df;margin-top:2px;" title="Última atualização: ${escHtml(ultimaAtualiz.texto||'')}">
+                  👤 ${escHtml(ultimaAtualiz.responsavel||'')}
+                  <br>${formatarData(ultimaAtualiz.data)}
+                </div>
+              ` : ''}
+            ` : (s.finalizado?.marcado ? '<span style="font-size:10px;color:#aaa;">—</span>' : '<span style="font-size:10px;color:#aaa;">—</span>')}
+          </td>
+
           <td>
             <button class="btn-danger" style="font-size:11px;padding:4px 8px;"
               onclick="removerSrvTicket('${t.id}',${i})">✕</button>
           </td>
-        </tr>`).join("")}
+        </tr>`}).join("")}
     </table>`;
 }
 
@@ -2321,6 +2409,63 @@ function confirmarAtualizacao(){
   verTicket(ticketId);
 }
 
+/* ============================================================
+   MODAL ATUALIZAÇÃO 48H POR SERVIÇO
+   ============================================================ */
+let _pendAtualizacaoServico = {ticketId:null, srvIdx:null};
+
+function abrirModalAtualizacaoServico(ticketId, srvIdx){
+  _pendAtualizacaoServico = {ticketId, srvIdx};
+  const t = tickets.find(x=>x.id===ticketId);
+  const srv = (t?.servicosTicket||[])[srvIdx];
+  const hDesde = Math.round(horasDesdeUltimaAtualizacaoServico(srv, t));
+  document.getElementById("modalAtualizacaoServicoInfo").textContent =
+    `Serviço: "${srv?.nome||""}" — Ticket #${ticketId} — ${hDesde}h sem atualização`;
+  const todosResp = responsaveis.length
+    ? responsaveis
+    : usuarios.map(u=>({nome:u.nome,setor:""}));
+  document.getElementById("modalAtualizacaoServicoResp").innerHTML =
+    '<option value="">-- Selecione o responsável --</option>' +
+    todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
+  document.getElementById("modalAtualizacaoServicoTexto").value="";
+  document.getElementById("modalAtualizacaoServico").style.display="flex";
+}
+
+async function confirmarAtualizacaoServico(){
+  const {ticketId, srvIdx} = _pendAtualizacaoServico;
+  if(!ticketId && srvIdx===null){fecharModal("modalAtualizacaoServico");return;}
+  const respVal = document.getElementById("modalAtualizacaoServicoResp").value.trim();
+  const responsavelNome = respVal.split(" (")[0];
+  if(!responsavelNome){alert("Selecione o responsável.");return;}
+  const texto = document.getElementById("modalAtualizacaoServicoTexto").value.trim();
+  if(!texto){alert("Informe a atualização.");return;}
+
+  const idx = tickets.findIndex(t=>t.id===ticketId);
+  if(idx<0){fecharModal("modalAtualizacaoServico");return;}
+
+  const srv = tickets[idx].servicosTicket[srvIdx];
+  const agr = agora();
+
+  // Grava atualização no serviço
+  if(!srv.atualizacoes) srv.atualizacoes = [];
+  srv.atualizacoes.push({
+    responsavel: responsavelNome,
+    usuario: usuarioLogado.nome,
+    data: agr,
+    texto: texto
+  });
+  srv.ultimaAtualizacaoServico = agr;
+
+  // Registra no histórico do ticket
+  _logHistorico(idx, `Serviço "${srv.nome}" ATUALIZADO — Responsável: ${responsavelNome} — "${texto}"`, "atualizacao48h_servico", {responsavel: responsavelNome});
+  tickets[idx].ultimaAtualizacao = agr;
+
+  await salvarTicket(tickets[idx]);
+  fecharModal("modalAtualizacaoServico");
+  _pendAtualizacaoServico = {ticketId:null, srvIdx:null};
+  verTicket(ticketId);
+}
+
 
 /* ============================================================
    MODAL AGUARDANDO CLIENTE
@@ -2557,12 +2702,13 @@ function refreshHistorico(idx){
 function renderHistorico(hist){
   if(!hist.length) return '<p style="color:#aaa;font-size:12px;">Nenhum registro ainda.</p>';
   return hist.slice().reverse().map(h=>{
-    const isAtualiz = h.tipo==="atualizacao48h";
+    const isAtualiz = h.tipo==="atualizacao48h" || h.tipo==="atualizacao48h_servico";
     const isPendCliente = (h.acao||"").includes("Pendência");
     return `
       <div class="hist-row${isAtualiz?" atualiz":""}" ${isPendCliente?'style="background:#fce4ec;border-left:3px solid #e91e8c;padding-left:8px;"':""}>
         <b>${escHtml(h.usuario)}</b>${h.responsavel?` <span style="font-size:10px;color:#666;">(Resp: ${escHtml(h.responsavel)})</span>`:""}
-        ${isAtualiz?'<span style="background:#f6c23e;color:#000;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">UPDATE 48h</span>':""}
+        ${h.tipo==="atualizacao48h"?'<span style="background:#f6c23e;color:#000;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">UPDATE 48h</span>':""}
+        ${h.tipo==="atualizacao48h_servico"?'<span style="background:#f6c23e;color:#000;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">UPDATE SERVIÇO 48h</span>':""}
         ${isPendCliente?'<span style="background:#e91e8c;color:#fff;font-size:10px;padding:1px 6px;border-radius:8px;margin:0 4px;">PEND. CLIENTE</span>':""}
         — ${escHtml(h.acao)}
         <span style="color:#888;float:right;font-size:11px;">${formatarData(h.data)}</span>
@@ -2868,33 +3014,78 @@ function elegivelEncerrarPorFaltaResposta(t){
 function calcularSLARestante(ticket){
   const srvs = ticket.servicosTicket || [];
 
-  // Regra: SLA só deve contar para serviços NÃO finalizados.
-  // Mantemos o comportamento atual (SLA por serviço), mas ignoramos os que já estão finalizados.
-  let slaHoras = 0;
+  // Avalia SLA individual de CADA serviço não finalizado.
+  // O ticket é considerado ATRASADO se QUALQUER serviço ultrapassar seu SLA.
+  // Retorna o pior caso (serviço mais atrasado ou com menos tempo restante).
+  const abertura = new Date(ticket.dataAbertura);
+  const agoraMs  = Date.now();
 
-  // Se houver serviços no ticket, considera o primeiro que ainda NÃO foi finalizado.
-  // Se todos estiverem finalizados, não exibe SLA/atraso.
-  let nomeSrv = "";
-  if(srvs.length){
-    const srvAtivo = srvs.find(s => !(s.finalizado?.marcado));
-    nomeSrv = srvAtivo ? (srvAtivo.nome || "") : "";
-  }else{
+  let pioresHoras    = null;  // menor restante (ou mais negativo)
+  let pioresPorc     = 0;
+  let pioresAtrasado = false;
+  let temSLA         = false;
+
+  const srvAtivos = srvs.filter(s => !(s.finalizado?.marcado));
+
+  if(srvAtivos.length){
+    srvAtivos.forEach(s => {
+      const sc = servicosCadastro.find(c => c.nome === s.nome);
+      if(!sc || !sc.sla) return;
+      temSLA = true;
+      const decorrido = (agoraMs - abertura.getTime()) / 3600000;
+      const restante  = sc.sla - decorrido;
+      const porc      = Math.min(100, Math.round((decorrido / sc.sla) * 100));
+      if(pioresHoras === null || restante < pioresHoras){
+        pioresHoras    = restante;
+        pioresPorc     = porc;
+        pioresAtrasado = restante < 0;
+      }
+    });
+  } else if(!srvs.length) {
     // Fallback legado: tickets antigos podem ter apenas `ticket.servico`
-    nomeSrv = ticket.servico || "";
+    const nomeSrv = ticket.servico || "";
+    if(nomeSrv){
+      const sc = servicosCadastro.find(s => s.nome === nomeSrv);
+      if(sc && sc.sla){
+        temSLA = true;
+        const decorrido = (agoraMs - abertura.getTime()) / 3600000;
+        pioresHoras    = sc.sla - decorrido;
+        pioresPorc     = Math.min(100, Math.round((decorrido / sc.sla) * 100));
+        pioresAtrasado = pioresHoras < 0;
+      }
+    }
   }
 
-  if(nomeSrv){
-    const sc = servicosCadastro.find(s => s.nome === nomeSrv);
-    slaHoras = sc ? sc.sla : 0;
-  }
+  if(!temSLA) return null;
 
-  if(!slaHoras) return null;
+  return {horas:pioresHoras, atrasado:pioresAtrasado, porcentagem:pioresPorc};
+}
 
+/* Calcula SLA individual de um serviço específico dentro do ticket */
+function calcularSLAServico(ticket, srv){
+  if(srv.finalizado?.marcado) return null;
+  const sc = servicosCadastro.find(c => c.nome === srv.nome);
+  if(!sc || !sc.sla) return null;
   const abertura  = new Date(ticket.dataAbertura);
-  const decorrido = (new Date() - abertura) / 3600000;
-  const restante  = slaHoras - decorrido;
+  const decorrido = (Date.now() - abertura.getTime()) / 3600000;
+  const restante  = sc.sla - decorrido;
+  return {horas:restante, atrasado:restante < 0, porcentagem:Math.min(100, Math.round((decorrido / sc.sla) * 100)), slaTotal:sc.sla};
+}
 
-  return {horas:restante, atrasado:restante < 0, porcentagem:Math.min(100, Math.round((decorrido / slaHoras) * 100))};
+/* Verifica se um serviço individual precisa de atualização (48h sem update) */
+function servicoPrecisaAtualizacao48h(ticket, srv){
+  if(ticket.status === "Concluído" || ticket.status === "Encerrado" || ticket.status === "Cancelado") return false;
+  if(!srv.iniciado?.marcado || srv.finalizado?.marcado) return false;
+  const ref = srv.ultimaAtualizacaoServico || srv.iniciado?.data || ticket.ultimaAtualizacao || ticket.dataAbertura;
+  if(!ref) return false;
+  return (Date.now() - new Date(ref).getTime()) / 3600000 >= 48;
+}
+
+/* Horas desde última atualização de um serviço */
+function horasDesdeUltimaAtualizacaoServico(srv, ticket){
+  const ref = srv.ultimaAtualizacaoServico || srv.iniciado?.data || ticket.ultimaAtualizacao || ticket.dataAbertura;
+  if(!ref) return 0;
+  return (Date.now() - new Date(ref).getTime()) / 3600000;
 }
 
 function corStatus(s){
@@ -3173,24 +3364,57 @@ function _horasPendenciaCliente(ticket){
   return _difHoras(ticket.pendenciaClienteData, fim) || 0;
 }
 
-// SLA do ticket (primeiro serviço)
+// SLA do ticket — retorna o MENOR SLA dentre os serviços ativos (pior caso)
 function _slaTicket(ticket){
   const srvs = ticket.servicosTicket || [];
-  const nome = srvs.length ? srvs[0].nome : (ticket.servico || "");
+  if(srvs.length){
+    let menorSla = null;
+    srvs.forEach(s => {
+      if(s.finalizado?.marcado) return;
+      const sc = servicosCadastro.find(c => c.nome === s.nome);
+      if(sc && sc.sla){
+        if(menorSla === null || sc.sla < menorSla) menorSla = sc.sla;
+      }
+    });
+    // Se todos finalizados, pega o primeiro para avaliação de prazo
+    if(menorSla === null && srvs.length){
+      const sc = servicosCadastro.find(c => c.nome === srvs[0].nome);
+      return sc ? sc.sla : null;
+    }
+    return menorSla;
+  }
+  const nome = ticket.servico || "";
   if(!nome) return null;
   const sc = servicosCadastro.find(s => s.nome === nome);
   return sc ? sc.sla : null;
 }
 
-// Verifica se ticket foi entregue dentro do SLA
+// Verifica se ticket foi entregue dentro do SLA — TODOS os serviços devem estar no prazo
 function _entregueNoPrazo(ticket){
   if(ticket.status !== "Concluído") return null; // não concluído = não avaliável
-  const sla = _slaTicket(ticket);
-  if(!sla) return null;
+  const srvs = ticket.servicosTicket || [];
   const abertura = new Date(ticket.dataAbertura);
   const conclusao = new Date(ticket.dataConclusao || ticket.ultimaAtualizacao);
-  const horas = (conclusao - abertura) / 3600000;
-  return horas <= sla;
+  const horasTotal = (conclusao - abertura) / 3600000;
+
+  if(srvs.length){
+    let temSla = false;
+    let foraDoPrazo = false;
+    srvs.forEach(s => {
+      const sc = servicosCadastro.find(c => c.nome === s.nome);
+      if(sc && sc.sla){
+        temSla = true;
+        if(horasTotal > sc.sla) foraDoPrazo = true;
+      }
+    });
+    if(!temSla) return null;
+    return !foraDoPrazo;
+  }
+
+  // Fallback legado
+  const sla = _slaTicket(ticket);
+  if(!sla) return null;
+  return horasTotal <= sla;
 }
 
 // Horas em atraso de um ticket concluído ou em aberto
