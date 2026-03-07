@@ -3487,30 +3487,45 @@ function mostrarDashboard(){
 
       <!-- Grid de gráficos -->
       <div class="dash-grid">
-        <div class="dash-card">
+        <div class="dash-card" style="grid-column:1/-1;">
           <h4>⏱ Horas médias para ativação de serviços</h4>
           <p>Tempo médio entre abertura do ticket e início de cada serviço</p>
-          <canvas id="chartAtivacao"></canvas>
+          <div id="chartAtivacaoWrap" style="position:relative;min-height:50px;"></div>
         </div>
         <div class="dash-card">
           <h4>🔴 Serviços com mais atrasos (ocorrências)</h4>
           <p>Quais serviços mais vezes ficaram fora do prazo SLA</p>
           <canvas id="chartServicosAtraso"></canvas>
         </div>
-        <div class="dash-card" style="grid-column:1/-1;">
-          <h4>👤 Responsável × Horas em atraso</h4>
-          <p>Total de horas em atraso (tickets + serviços) por responsável — use o filtro de serviço acima para refinar</p>
-          <canvas id="chartRespAtraso"></canvas>
-        </div>
         <div class="dash-card">
           <h4>✅ Tickets no prazo vs fora do prazo (SLA)</h4>
           <p>Proporção de tickets concluídos dentro e fora do SLA</p>
           <canvas id="chartSLA"></canvas>
         </div>
+        <div class="dash-card" style="grid-column:1/-1;">
+          <h4>👤 Responsável × Horas em atraso</h4>
+          <p>Total de horas em atraso (tickets + serviços) por responsável — use o filtro de serviço acima para refinar</p>
+          <canvas id="chartRespAtraso"></canvas>
+        </div>
+        <div class="dash-card" style="grid-column:1/-1;">
+          <h4>👤 Média de horas por responsável para ativar serviços</h4>
+          <p>Tempo médio (em horas) que cada responsável leva para iniciar os serviços atribuídos</p>
+          <div id="chartRespAtivacaoWrap" style="position:relative;min-height:50px;"></div>
+        </div>
+        <div class="dash-card" style="grid-column:1/-1;">
+          <h4>🏆 Ranking de Eficiência por Responsável</h4>
+          <p>Score composto: velocidade de ativação (40%), taxa de cumprimento SLA (30%), frequência de atualizações (20%) e menor atraso acumulado (10%). Quanto maior, melhor.</p>
+          <div id="rankingEficienciaWrap" style="position:relative;min-height:50px;"></div>
+        </div>
         <div class="dash-card">
           <h4>⏳ Horas de pendência por cliente</h4>
           <p>Total de horas que cada ticket ficou aguardando o cliente</p>
           <canvas id="chartPendCliente"></canvas>
+        </div>
+        <div class="dash-card">
+          <h4>📊 Detalhamento de Eficiência</h4>
+          <p>Tabela completa com métricas individuais de cada responsável</p>
+          <div id="tabelaEficiencia" style="overflow-x:auto;"></div>
         </div>
       </div>
     </div>`;
@@ -3573,7 +3588,7 @@ function atualizarDashboard(){
       <div class="dash-stat-lbl">Total Pend. Clientes</div>
     </div>`;
 
-  /* ── 1. Horas médias para ativação por serviço ── */
+  /* ── 1. Horas médias para ativação por serviço (CORRIGIDO: labels completos) ── */
   _destroyChart("chartAtivacao");
   const ativMap = {}; // nome → [horas]
   lista.forEach(t => {
@@ -3590,32 +3605,48 @@ function atualizarDashboard(){
     const arr = ativMap[k];
     return +(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1);
   });
-  // Ordena pelo maior tempo
   const ativSorted = ativLabels.map((l,i)=>({l,v:ativData[i]})).sort((a,b)=>b.v-a.v);
-  const el1 = document.getElementById("chartAtivacao");
-  if(el1){
-    _charts["chartAtivacao"] = new Chart(el1, {
-      type: "bar",
-      data: {
-        labels: ativSorted.map(x=>x.l),
-        datasets:[{
-          label:"Horas médias para ativar",
-          data: ativSorted.map(x=>x.v),
-          backgroundColor: PALETA,
-          borderRadius: 6
-        }]
-      },
-      options:{
-        responsive:true, indexAxis:"y",
-        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x.toFixed(1)}h`}}},
-        scales:{x:{beginAtZero:true,ticks:{callback:v=>v+"h"}}}
+
+  const wrapAtiv = document.getElementById("chartAtivacaoWrap");
+  if(wrapAtiv){
+    if(ativSorted.length === 0){
+      wrapAtiv.innerHTML = '<p style="color:#aaa;text-align:center;font-size:13px;padding:16px;">Nenhum serviço ativado no período.</p>';
+    } else {
+      const barH = Math.max(300, ativSorted.length * 38);
+      wrapAtiv.innerHTML = `<canvas id="chartAtivacao" style="max-height:${barH}px;"></canvas>`;
+      const el1 = document.getElementById("chartAtivacao");
+      if(el1){
+        _charts["chartAtivacao"] = new Chart(el1, {
+          type: "bar",
+          data: {
+            labels: ativSorted.map(x=>x.l),
+            datasets:[{
+              label:"Horas médias para ativar",
+              data: ativSorted.map(x=>x.v),
+              backgroundColor: PALETA.concat(PALETA).concat(PALETA),
+              borderRadius: 6
+            }]
+          },
+          options:{
+            responsive:true, maintainAspectRatio:false, indexAxis:"y",
+            layout:{padding:{left:10}},
+            plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.x.toFixed(1)}h`}}},
+            scales:{
+              x:{beginAtZero:true,ticks:{callback:v=>v+"h"}},
+              y:{ticks:{font:{size:11},autoSkip:false,callback:function(value){
+                const label = this.getLabelForValue(value);
+                return label;
+              }}}
+            }
+          }
+        });
       }
-    });
+    }
   }
 
   /* ── 2. Serviços com mais atrasos ── */
   _destroyChart("chartServicosAtraso");
-  const atrasoSrvMap = {}; // nome → contagem de ocorrências em atraso
+  const atrasoSrvMap = {};
   lista.forEach(t => {
     (t.servicosTicket||[]).forEach(srv => {
       const hAtras = _horasAtrasoServico(t, srv);
@@ -3640,25 +3671,26 @@ function atualizarDashboard(){
       },
       options:{
         responsive:true,
-        plugins:{legend:{display:false}},
-        scales:{y:{beginAtZero:true,ticks:{stepSize:1}}}
+        plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>`${ctx.parsed.y} ocorrências`}}},
+        scales:{
+          y:{beginAtZero:true,ticks:{stepSize:1}},
+          x:{ticks:{font:{size:10},maxRotation:45,minRotation:25}}
+        }
       }
     });
   }
 
   /* ── 3. Responsável × Horas em atraso ── */
   _destroyChart("chartRespAtraso");
-  const respAtrasoMap = {}; // nome → horas
+  const respAtrasoMap = {};
 
   lista.forEach(t => {
-    // Atraso do ticket (responsável do ticket)
     if(t.responsavel){
       const hT = _horasAtrasoTicket(t);
       if(hT > 0 && (!srvFiltro)){
         respAtrasoMap[t.responsavel] = (respAtrasoMap[t.responsavel]||0) + hT;
       }
     }
-    // Atraso por serviço
     (t.servicosTicket||[]).forEach(srv => {
       if(srvFiltro && srv.nome !== srvFiltro) return;
       const resp = srv.iniciado?.responsavel || srv.iniciado?.usuario || t.responsavel;
@@ -3696,7 +3728,7 @@ function atualizarDashboard(){
     });
   }
 
-  /* ── 4 & 5. SLA: no prazo vs fora do prazo ── */
+  /* ── 4. SLA: no prazo vs fora do prazo ── */
   _destroyChart("chartSLA");
   const el4 = document.getElementById("chartSLA");
   if(el4){
@@ -3725,7 +3757,266 @@ function atualizarDashboard(){
     });
   }
 
-  /* ── 6. Horas de pendência por cliente (top 15 tickets) ── */
+  /* ══════════════════════════════════════════════════════════════
+     NOVO: 5. Média de horas por responsável para ativar serviços
+     ══════════════════════════════════════════════════════════════ */
+  _destroyChart("chartRespAtivacao");
+  const respAtivMap = {}; // nome → [horas]
+  lista.forEach(t => {
+    (t.servicosTicket||[]).forEach(srv => {
+      const h = _horasParaIniciarServico(t, srv);
+      if(h === null) return;
+      const resp = srv.iniciado?.responsavel || srv.iniciado?.usuario || t.responsavel;
+      if(!resp) return;
+      if(!respAtivMap[resp]) respAtivMap[resp] = [];
+      respAtivMap[resp].push(h);
+    });
+  });
+  const respAtivEntries = Object.entries(respAtivMap).map(([nome, arr]) => ({
+    nome,
+    media: +(arr.reduce((a,b)=>a+b,0)/arr.length).toFixed(1),
+    qtd: arr.length
+  })).sort((a,b)=>b.media-a.media);
+
+  const wrapRA = document.getElementById("chartRespAtivacaoWrap");
+  if(wrapRA){
+    if(respAtivEntries.length === 0){
+      wrapRA.innerHTML = '<p style="color:#aaa;text-align:center;font-size:13px;padding:16px;">Nenhum dado de ativação por responsável no período.</p>';
+    } else {
+      const barH2 = Math.max(280, respAtivEntries.length * 36);
+      wrapRA.innerHTML = `<canvas id="chartRespAtivacao" style="max-height:${barH2}px;"></canvas>`;
+      const elRA = document.getElementById("chartRespAtivacao");
+      if(elRA){
+        _charts["chartRespAtivacao"] = new Chart(elRA, {
+          type:"bar",
+          data:{
+            labels: respAtivEntries.map(x=>`${x.nome} (${x.qtd} srv)`),
+            datasets:[{
+              label:"Média de horas para ativar",
+              data: respAtivEntries.map(x=>x.media),
+              backgroundColor: respAtivEntries.map((x,i)=>{
+                if(x.media <= 6) return "#1cc88a";
+                if(x.media <= 12) return "#36b9cc";
+                if(x.media <= 24) return "#f6c23e";
+                return "#e74a3b";
+              }),
+              borderRadius:6
+            }]
+          },
+          options:{
+            responsive:true, maintainAspectRatio:false, indexAxis:"y",
+            plugins:{
+              legend:{display:false},
+              tooltip:{callbacks:{label:ctx=>{
+                const e = respAtivEntries[ctx.dataIndex];
+                return `Média: ${e.media}h (${e.qtd} serviço(s))`;
+              }}}
+            },
+            scales:{
+              x:{beginAtZero:true,ticks:{callback:v=>v+"h"}},
+              y:{ticks:{font:{size:11},autoSkip:false}}
+            }
+          }
+        });
+      }
+    }
+  }
+
+  /* ══════════════════════════════════════════════════════════════
+     NOVO: 6. Ranking de Eficiência por Responsável
+     Score = velocidade ativação (40%) + SLA cumprido (30%) +
+             frequência de atualizações (20%) + menor atraso (10%)
+     ══════════════════════════════════════════════════════════════ */
+  _destroyChart("chartRankingEficiencia");
+
+  // Coleta métricas por responsável
+  const efMap = {}; // nome → {ativHoras:[], slaOk:0, slaTotal:0, atualiz:0, srvTotal:0, atrasoHrs:0}
+  lista.forEach(t => {
+    (t.servicosTicket||[]).forEach(srv => {
+      const resp = srv.iniciado?.responsavel || srv.iniciado?.usuario || t.responsavel;
+      if(!resp) return;
+      if(!efMap[resp]) efMap[resp] = {ativHoras:[], slaOk:0, slaTotal:0, atualiz:0, srvTotal:0, atrasoHrs:0};
+      efMap[resp].srvTotal++;
+
+      // Velocidade de ativação
+      const hAtiv = _horasParaIniciarServico(t, srv);
+      if(hAtiv !== null) efMap[resp].ativHoras.push(hAtiv);
+
+      // SLA cumprido?
+      const sc = servicosCadastro.find(c => c.nome === srv.nome);
+      if(sc && sc.sla){
+        efMap[resp].slaTotal++;
+        const abertura = new Date(t.dataAbertura);
+        const fimRef = srv.finalizado?.marcado ? new Date(srv.finalizado.data) : new Date();
+        const hSrv = (fimRef - abertura) / 3600000;
+        if(hSrv <= sc.sla) efMap[resp].slaOk++;
+      }
+
+      // Atualizações do serviço
+      efMap[resp].atualiz += (srv.atualizacoes||[]).length;
+
+      // Atraso acumulado
+      const hAtras = _horasAtrasoServico(t, srv);
+      if(hAtras > 0) efMap[resp].atrasoHrs += hAtras;
+    });
+  });
+
+  const efEntries = Object.entries(efMap).map(([nome, d]) => {
+    const mediaAtiv = d.ativHoras.length ? d.ativHoras.reduce((a,b)=>a+b,0)/d.ativHoras.length : 999;
+    const taxaSLA = d.slaTotal > 0 ? (d.slaOk / d.slaTotal) : 0;
+    const freqAtualiz = d.srvTotal > 0 ? (d.atualiz / d.srvTotal) : 0;
+    const atraso = d.atrasoHrs;
+
+    // Normalização para score (0-100)
+    // Ativação: quanto menor melhor. 0h=100, 48h+=0
+    const scoreAtiv = Math.max(0, Math.min(100, 100 - (mediaAtiv / 48 * 100)));
+    // SLA: percentual direto
+    const scoreSLA = taxaSLA * 100;
+    // Atualizações: mais = melhor. 2+ por srv = 100
+    const scoreAtualiz = Math.min(100, freqAtualiz * 50);
+    // Atraso: 0h=100, 100h+=0
+    const scoreAtraso = Math.max(0, Math.min(100, 100 - (atraso / 100 * 100)));
+
+    // Score composto
+    const score = (scoreAtiv * 0.40) + (scoreSLA * 0.30) + (scoreAtualiz * 0.20) + (scoreAtraso * 0.10);
+
+    return {
+      nome, score: +score.toFixed(1),
+      mediaAtiv: +mediaAtiv.toFixed(1),
+      taxaSLA: +(taxaSLA*100).toFixed(1),
+      freqAtualiz: +freqAtualiz.toFixed(2),
+      atraso: +atraso.toFixed(1),
+      srvTotal: d.srvTotal,
+      slaOk: d.slaOk,
+      slaTotal: d.slaTotal,
+      qtdAtualiz: d.atualiz,
+      scoreAtiv: +scoreAtiv.toFixed(1),
+      scoreSLA: +scoreSLA.toFixed(1),
+      scoreAtualiz: +scoreAtualiz.toFixed(1),
+      scoreAtraso: +scoreAtraso.toFixed(1)
+    };
+  }).filter(x => x.srvTotal >= 1).sort((a,b)=>b.score-a.score);
+
+  const wrapRank = document.getElementById("rankingEficienciaWrap");
+  if(wrapRank){
+    if(efEntries.length === 0){
+      wrapRank.innerHTML = '<p style="color:#aaa;text-align:center;font-size:13px;padding:16px;">Nenhum dado de eficiência disponível no período.</p>';
+    } else {
+      const barH3 = Math.max(280, efEntries.length * 40);
+      wrapRank.innerHTML = `<canvas id="chartRankingEficiencia" style="max-height:${barH3}px;"></canvas>`;
+      const elRank = document.getElementById("chartRankingEficiencia");
+      if(elRank){
+        _charts["chartRankingEficiencia"] = new Chart(elRank, {
+          type:"bar",
+          data:{
+            labels: efEntries.map((x,i)=>`${i===0?"🥇":i===1?"🥈":i===2?"🥉":"#"+(i+1)} ${x.nome}`),
+            datasets:[
+              {
+                label:"Velocidade Ativação (40%)",
+                data: efEntries.map(x=>+( x.scoreAtiv * 0.40 ).toFixed(1)),
+                backgroundColor:"#4e73df",
+                borderRadius:4,
+                stack:"score"
+              },
+              {
+                label:"Cumprimento SLA (30%)",
+                data: efEntries.map(x=>+( x.scoreSLA * 0.30 ).toFixed(1)),
+                backgroundColor:"#1cc88a",
+                borderRadius:4,
+                stack:"score"
+              },
+              {
+                label:"Frequência Atualizações (20%)",
+                data: efEntries.map(x=>+( x.scoreAtualiz * 0.20 ).toFixed(1)),
+                backgroundColor:"#36b9cc",
+                borderRadius:4,
+                stack:"score"
+              },
+              {
+                label:"Menor Atraso (10%)",
+                data: efEntries.map(x=>+( x.scoreAtraso * 0.10 ).toFixed(1)),
+                backgroundColor:"#f6c23e",
+                borderRadius:4,
+                stack:"score"
+              }
+            ]
+          },
+          options:{
+            responsive:true, maintainAspectRatio:false, indexAxis:"y",
+            plugins:{
+              legend:{position:"bottom",labels:{font:{size:11},boxWidth:14}},
+              tooltip:{callbacks:{
+                afterBody:function(items){
+                  const idx = items[0].dataIndex;
+                  const e = efEntries[idx];
+                  return [
+                    `──────────────────`,
+                    `Score Total: ${e.score}/100`,
+                    `Média ativação: ${e.mediaAtiv}h`,
+                    `SLA: ${e.slaOk}/${e.slaTotal} (${e.taxaSLA}%)`,
+                    `Atualizações: ${e.qtdAtualiz} em ${e.srvTotal} srv`,
+                    `Atraso acumul.: ${e.atraso}h`
+                  ];
+                }
+              }}
+            },
+            scales:{
+              x:{beginAtZero:true,max:100,stacked:true,ticks:{callback:v=>v+"pts"},title:{display:true,text:"Score de Eficiência (0-100)",font:{size:11}}},
+              y:{stacked:true,ticks:{font:{size:11},autoSkip:false}}
+            }
+          }
+        });
+      }
+    }
+  }
+
+  /* ── Tabela de detalhamento de eficiência ── */
+  const tabelaWrap = document.getElementById("tabelaEficiencia");
+  if(tabelaWrap){
+    if(efEntries.length === 0){
+      tabelaWrap.innerHTML = '<p style="color:#aaa;font-size:13px;">Sem dados.</p>';
+    } else {
+      tabelaWrap.innerHTML = `
+        <table class="srv-table" style="font-size:12px;min-width:700px;">
+          <thead>
+            <tr style="background:#f0f4ff;">
+              <th style="padding:8px 6px;">#</th>
+              <th style="padding:8px 6px;">Responsável</th>
+              <th style="padding:8px 6px;text-align:center;">Score</th>
+              <th style="padding:8px 6px;text-align:center;">Média Ativação</th>
+              <th style="padding:8px 6px;text-align:center;">SLA Cumprido</th>
+              <th style="padding:8px 6px;text-align:center;">Atualizações/Srv</th>
+              <th style="padding:8px 6px;text-align:center;">Atraso Acum.</th>
+              <th style="padding:8px 6px;text-align:center;">Serviços</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${efEntries.map((e,i) => {
+              const medalha = i===0?"🥇":i===1?"🥈":i===2?"🥉":"";
+              const bgScore = e.score >= 70 ? "#d4edda" : e.score >= 40 ? "#fff3cd" : "#f8d7da";
+              const corScore = e.score >= 70 ? "#155724" : e.score >= 40 ? "#856404" : "#721c24";
+              return `<tr${i<3?' style="font-weight:600;"':''}>
+                <td style="padding:6px;text-align:center;">${medalha || (i+1)}</td>
+                <td style="padding:6px;">${escHtml(e.nome)}</td>
+                <td style="padding:6px;text-align:center;">
+                  <span style="background:${bgScore};color:${corScore};padding:3px 8px;border-radius:10px;font-weight:700;font-size:13px;">${e.score}</span>
+                </td>
+                <td style="padding:6px;text-align:center;color:${e.mediaAtiv<=12?"#1cc88a":e.mediaAtiv<=24?"#f6c23e":"#e74a3b"};font-weight:600;">${e.mediaAtiv}h</td>
+                <td style="padding:6px;text-align:center;">
+                  <span style="color:${e.taxaSLA>=80?"#1cc88a":e.taxaSLA>=50?"#f6c23e":"#e74a3b"};font-weight:600;">${e.taxaSLA}%</span>
+                  <span style="color:#888;font-size:10px;"> (${e.slaOk}/${e.slaTotal})</span>
+                </td>
+                <td style="padding:6px;text-align:center;">${e.freqAtualiz} <span style="color:#888;font-size:10px;">(${e.qtdAtualiz} total)</span></td>
+                <td style="padding:6px;text-align:center;color:${e.atraso<=5?"#1cc88a":e.atraso<=24?"#f6c23e":"#e74a3b"};font-weight:600;">${e.atraso}h</td>
+                <td style="padding:6px;text-align:center;">${e.srvTotal}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>`;
+    }
+  }
+
+  /* ── 7. Horas de pendência por cliente (top 15 tickets) ── */
   _destroyChart("chartPendCliente");
   const pendList = lista
     .map(t => ({
