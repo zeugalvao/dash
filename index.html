@@ -323,8 +323,16 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#4e73df;">
       📝 O responsável e a data/hora serão gravados no histórico.
     </div>
+    <div id="avisoApiKeyObrigatoria" style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#856404;display:none;">
+      🔑 <b>Atenção!</b> Este serviço requer o preenchimento da <b>API Key</b> e do <b>Responsável</b> para ser finalizado.
+    </div>
     <label style="margin-top:6px;display:block;"><b>Responsável pelo encerramento:</b></label>
     <select id="modalFinalizadoResp" style="margin:6px 0 8px;"></select>
+    <div id="wrapApiKey" style="display:none;">
+      <label style="display:block;font-size:12px;color:#666;margin-top:4px;"><b>🔑 API Key *</b></label>
+      <input id="modalFinalizadoApiKey" type="text" placeholder="Digite a API Key do serviço..."
+        style="margin:4px 0 8px;">
+    </div>
     <label style="margin-top:4px;display:block;font-size:12px;color:#666;">Observação (opcional):</label>
     <textarea id="modalFinalizadoObs" rows="2"
       style="margin:4px 0 16px;resize:vertical;"
@@ -1323,6 +1331,25 @@ async function excluirUsuario(i){
 /* ============================================================
    TICKETS — LISTA
    ============================================================ */
+
+/* Monta as opções de responsáveis para o filtro de tickets em aberto */
+function _montarOpcoesResponsavelFiltro(){
+  // Coleta todos os responsáveis únicos de tickets e serviços
+  const nomes = new Set();
+  tickets.forEach(t => {
+    if(t.responsavel) nomes.add(t.responsavel);
+    (t.servicosTicket||[]).forEach(s => {
+      if(s.iniciado?.responsavel) nomes.add(s.iniciado.responsavel);
+      if(s.finalizado?.responsavel) nomes.add(s.finalizado.responsavel);
+      if(s.assinatura?.responsavel) nomes.add(s.assinatura.responsavel);
+    });
+  });
+  // Adiciona os responsáveis cadastrados
+  responsaveis.forEach(r => { if(r.nome) nomes.add(r.nome); });
+  return [...nomes].sort((a,b)=>a.localeCompare(b,'pt-BR'))
+    .map(n => `<option value="${escHtml(n)}">${escHtml(n)}</option>`).join("");
+}
+
 function mostrarTickets(){
   _telaAtual="tickets";
   _ticketAbertoId=null;
@@ -1410,6 +1437,10 @@ function mostrarTickets(){
             <option value="iniciados">🔵 Em andamento (Cred.)</option>
             <option value="concluidos">✅ Concluídos</option>
           </select>
+          <select id="filtroResponsavel" onchange="filtrarTickets()" style="width:200px;margin:0;">
+            <option value="">Todos os responsáveis</option>
+            ${_montarOpcoesResponsavelFiltro()}
+          </select>
           <button class="btn-dark" onclick="limparFiltros()" style="padding:6px 10px;">✕</button>
         </div>
       </div>
@@ -1434,6 +1465,7 @@ function filtrarTickets(){
   const busca  = (document.getElementById("buscaTicket")?.value||"").toLowerCase();
   const status = document.getElementById("filtroStatus")?.value||"";
   const alerta = document.getElementById("filtroAlerta")?.value||"";
+  const respFiltro = document.getElementById("filtroResponsavel")?.value||"";
   let lista    = ticketsVisiveis().sort((a,b)=>new Date(b.dataAbertura)-new Date(a.dataAbertura));
 
   if(status) lista = lista.filter(t => t.status === status);
@@ -1462,6 +1494,21 @@ function filtrarTickets(){
     lista = lista.filter(t => t.status === "Concluído" || t.status === "Cancelado");
   }
 
+  // Filtro por responsável (inclui responsável do ticket E responsáveis de serviços iniciados)
+  if(respFiltro){
+    lista = lista.filter(t => {
+      // Responsável principal do ticket
+      if((t.responsavel||"") === respFiltro) return true;
+      // Responsáveis de serviços (iniciado, finalizado, assinatura)
+      const srvs = t.servicosTicket || [];
+      return srvs.some(s =>
+        (s.iniciado?.responsavel||"") === respFiltro ||
+        (s.finalizado?.responsavel||"") === respFiltro ||
+        (s.assinatura?.responsavel||"") === respFiltro
+      );
+    });
+  }
+
   if(busca) lista = lista.filter(t =>
     (t.titulo||"").toLowerCase().includes(busca)||
     (t.cliente||"").toLowerCase().includes(busca)||
@@ -1477,9 +1524,11 @@ function filtroRapido(valor){
   const a = document.getElementById("filtroAlerta");
   const s = document.getElementById("filtroStatus");
   const b = document.getElementById("buscaTicket");
+  const r = document.getElementById("filtroResponsavel");
   if(a){ a.value = valor; }
   if(s){ s.value = ""; }
   if(b){ b.value = ""; }
+  if(r){ r.value = ""; }
   filtrarTickets();
 }
 
@@ -1487,9 +1536,11 @@ function limparFiltros(){
   const b = document.getElementById("buscaTicket");
   const s = document.getElementById("filtroStatus");
   const a = document.getElementById("filtroAlerta");
+  const r = document.getElementById("filtroResponsavel");
   if(b) b.value="";
   if(s) s.value="";
   if(a) a.value="";
+  if(r) r.value="";
   filtrarTickets();
 }
 
@@ -1736,9 +1787,12 @@ const obs        = "";
   if(!setor)  {alert("Selecione o setor.");document.getElementById("nt_setor").focus();return;}
 
   const agr = agora();
+  const isComercial = (setor||'').toLowerCase().includes('comercial');
   const ticket={
     id:gerarId(), titulo,cliente,cnpj,setor,responsavel,prioridade,status,canal,descricao,obs,
     abertoPor:usuarioLogado.nome,
+    abertoPorComercial: isComercial ? usuarioLogado.nome : "",
+    primeiroResponsavelCredenciamento: "",
     dataAbertura:agr,
     ultimaAtualizacao:agr,
     dataChegadaCredenciamento:(setor||'').toLowerCase().includes('credenci') ? agr : null,
@@ -1813,6 +1867,8 @@ function verTicket(id, _realtimeRefresh=false){
         Aberto por <b>${escHtml(t.abertoPor)}</b> em ${formatarData(t.dataAbertura)} &bull; Canal: ${escHtml(t.canal||"-")}
         &bull; Última atualização: <b>${formatarData(t.ultimaAtualizacao)}</b>
         ${t.dataChegadaCredenciamento?`&bull; Chegou ao Cred.: <b>${formatarData(t.dataChegadaCredenciamento)}</b>`:""}
+        ${t.abertoPorComercial?`<br>📌 <b>Aberto no Comercial por:</b> <span style="color:#4e73df;font-weight:600;">${escHtml(t.abertoPorComercial)}</span>`:""}
+        ${t.primeiroResponsavelCredenciamento?`<br>📌 <b>1º Responsável no Credenciamento:</b> <span style="color:#1cc88a;font-weight:600;">${escHtml(t.primeiroResponsavelCredenciamento)}</span>`:""}
       </div>
 
 
@@ -2061,6 +2117,7 @@ function renderTabelaServicosTicket(t){
                 <span class="chk-resp">👤 ${escHtml(s.finalizado.responsavel||s.finalizado.usuario)}</span>
                 <span class="chk-info">${escHtml(s.finalizado.usuario)} &bull; ${formatarData(s.finalizado.data)}</span>
                 ${s.finalizado.obs?`<span class="chk-info" style="color:#666;font-style:italic;">"${escHtml(s.finalizado.obs)}"</span>`:""}
+                ${s.apiKey?`<span class="chk-info" style="color:#856404;background:#fff3cd;padding:1px 6px;border-radius:4px;margin-top:2px;">🔑 API Key: ${escHtml(s.apiKey)}</span>`:""}
               `:""}
             </div>
           </td>
@@ -2132,6 +2189,10 @@ function confirmarIniciado(){
   if(idx<0){ fecharModal("modalIniciado"); return; }
   const srv = tickets[idx].servicosTicket[srvIdx];
   srv.iniciado = { marcado:true, usuario:usuarioLogado.nome, responsavel:responsavelNome, obs, data:agora() };
+  // Grava o primeiro responsável no credenciamento (apenas na primeira vez)
+  if(!tickets[idx].primeiroResponsavelCredenciamento){
+    tickets[idx].primeiroResponsavelCredenciamento = responsavelNome;
+  }
   const acao = `Serviço "${srv.nome}" INICIADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}`;
   _logHistorico(idx, acao);
   tickets[idx].ultimaAtualizacao = agora();
@@ -2222,6 +2283,13 @@ function desmarcarAssinatura(ticketId, srvIdx){
 
 
 /* Clique no checkbox FINALIZADO */
+/* Serviços que exigem API Key ao finalizar */
+const _SERVICOS_EXIGEM_APIKEY = ["BIN","REDE","CIELO","PAGSEGURO","GETNET"];
+function _servicoExigeApiKey(nomeServico){
+  const upper = (nomeServico||"").toUpperCase();
+  return _SERVICOS_EXIGEM_APIKEY.some(kw => upper.includes(kw));
+}
+
 function aoClicarFinalizado(ticketId, srvIdx, marcado){
   if(marcado){
     _pendFinalizado = {ticketId, srvIdx};
@@ -2240,6 +2308,16 @@ function aoClicarFinalizado(ticketId, srvIdx, marcado){
       '<option value="">-- Selecione o responsável --</option>' +
       todosResp.map(r=>`<option>${escHtml(r.nome)}${r.setor?` (${r.setor})`:""}</option>`).join("");
     document.getElementById("modalFinalizadoObs").value="";
+
+    // Mostra/esconde campo API Key conforme o nome do serviço
+    const exigeApiKey = _servicoExigeApiKey(srv?.nome||"");
+    const wrapApi = document.getElementById("wrapApiKey");
+    const avisoApi = document.getElementById("avisoApiKeyObrigatoria");
+    const inputApi = document.getElementById("modalFinalizadoApiKey");
+    if(wrapApi) wrapApi.style.display = exigeApiKey ? "block" : "none";
+    if(avisoApi) avisoApi.style.display = exigeApiKey ? "block" : "none";
+    if(inputApi) inputApi.value = "";
+
     document.getElementById("modalFinalizado").style.display="flex";
   } else {
     _pendDesmarcarFin = {ticketId, srvIdx};
@@ -2322,8 +2400,24 @@ function confirmarFinalizado(){
   if(idx<0){ fecharModal("modalFinalizado"); return; }
   const srv = tickets[idx].servicosTicket[srvIdx];
   const agr = agora();
+
+  // Validação API Key para serviços BIN/REDE/CIELO/PAGSEGURO/GETNET
+  let apiKeyValue = "";
+  if(_servicoExigeApiKey(srv.nome)){
+    apiKeyValue = (document.getElementById("modalFinalizadoApiKey")?.value||"").trim();
+    if(!apiKeyValue){
+      alert("⚠️ Este serviço exige o preenchimento da API Key para ser finalizado.");
+      return;
+    }
+  }
+
   srv.finalizado = { marcado:true, usuario:usuarioLogado.nome, responsavel:responsavelNome, obs, data:agr };
-  const acao = `Serviço "${srv.nome}" FINALIZADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}`;
+  // Salva API Key no serviço se aplicável
+  if(apiKeyValue){
+    srv.apiKey = apiKeyValue;
+  }
+  const acaoApiKey = apiKeyValue ? ` — API Key: "${apiKeyValue}"` : "";
+  const acao = `Serviço "${srv.nome}" FINALIZADO — Responsável: ${responsavelNome}${obs?` — Obs: "${obs}"`:""}${acaoApiKey}`;
   _logHistorico(idx, acao);
   tickets[idx].ultimaAtualizacao = agr;
   const srvs = tickets[idx].servicosTicket||[];
