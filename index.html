@@ -273,7 +273,9 @@ async function consultarCNPJ(inputId, resultId){
       :`<span style="background:#f8d7da;color:#721c24;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;">⚠ ${sit||"INATIVA"}</span>`;
 
     // ── PIX Automático ────────────────────────────────────
-    const aptoPix=["LTDA","SLU","EIRELI"].includes(tipo);
+    // ME é apta se NÃO for sociedade individual (Empresário Individual / empresa individual)
+    const isSociedadeIndividual=nat.includes("EMPRESÁRIO")||nat.includes("EMPRESA INDIVIDUAL");
+    const aptoPix=["LTDA","SLU","EIRELI"].includes(tipo)||(tipo==="ME"&&!isSociedadeIndividual);
     const pixBadge=aptoPix
       ?`<span style="background:#d4edda;color:#155724;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;">✅ Apto ao PIX Automático</span>`
       :`<span style="background:#f8d7da;color:#721c24;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;">🚫 Não apto ao PIX Automático</span>`;
@@ -289,7 +291,7 @@ async function consultarCNPJ(inputId, resultId){
     // ── Card de aviso para não aptos ──────────────────────
     const avisoHtml=!aptoPix
       ?`<div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11px;color:#856404;">
-          ⚠ Apenas <b>LTDA, SLU e EIRELI</b> são elegíveis ao PIX Automático. Esta empresa (${tipo}) não atende esse critério.
+          ⚠ Apenas <b>LTDA, SLU, EIRELI e ME (sociedade)</b> são elegíveis ao PIX Automático. Esta empresa (${tipo}${tipo==="ME"?" — sociedade individual":""}) não atende esse critério.
         </div>`
       :"";
 
