@@ -203,6 +203,114 @@ function escHtml(s){return String(s||"").replace(/&/g,"&").replace(/"/g,"&quot;"
 function agora(){return new Date().toISOString();}
 function formatarData(iso){if(!iso)return"-";try{return new Date(iso).toLocaleString("pt-BR");}catch(e){return"-";}}
 function normalizarCnpj(s){return(s||"").replace(/[.\-\/\s]/g,"").trim();}
+
+/* ============================================================
+   CONSULTA CNPJ — BrasilAPI (espelho Receita Federal)
+   ============================================================ */
+function _formatarDataRF(s){
+  // aceita "YYYY-MM-DD" ou "DD/MM/YYYY"
+  if(!s)return null;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)){const[y,m,d]=s.split("-");return`${d}/${m}/${y}`;}
+  if(/^\d{2}\/\d{2}\/\d{4}$/.test(s))return s;
+  return null;
+}
+async function consultarCNPJ(inputId, resultId){
+  const raw=(document.getElementById(inputId)?.value||"").trim();
+  const num=normalizarCnpj(raw);
+  const el=document.getElementById(resultId);
+  if(!el)return;
+
+  // ── CPF (11 dígitos) ──────────────────────────────────────
+  if(num.length===11&&/^\d{11}$/.test(num)){
+    el.innerHTML=`
+    <div style="background:#fff8f0;border:1px solid #fd7e14;border-radius:8px;padding:8px 12px;margin-top:5px;font-size:12px;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:2px;">
+        <span style="background:#fd7e14;color:white;font-weight:800;padding:2px 10px;border-radius:12px;font-size:12px;">👤 PESSOA FÍSICA</span>
+        <span style="background:#fff3cd;color:#856404;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;">⚠ Não apto ao PIX Automático</span>
+      </div>
+      <div style="color:#888;font-size:10px;margin-top:3px;">Cadastro via CPF — pessoa física não é elegível ao PIX automático empresarial.</div>
+    </div>`;
+    return;
+  }
+
+  // ── Não é CPF nem CNPJ ───────────────────────────────────
+  if(num.length!==14||!/^\d{14}$/.test(num)){el.innerHTML="";return;}
+
+  // ── Loading ───────────────────────────────────────────────
+  el.innerHTML=`<div style="display:inline-flex;align-items:center;gap:6px;background:#f0f4ff;border:1px solid #d0d9f0;border-radius:20px;padding:4px 12px;font-size:12px;color:#4e73df;margin-top:4px;">
+    <svg style="animation:_spin 1s linear infinite;flex-shrink:0;" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-opacity=".2"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+    Consultando Receita Federal…
+  </div>
+  <style>@keyframes _spin{to{transform:rotate(360deg)}}</style>`;
+
+  try{
+    const res=await fetch(`https://brasilapi.com.br/api/cnpj/v1/${num}`);
+    if(!res.ok)throw new Error("HTTP "+res.status);
+    const d=await res.json();
+
+    const porte=(d.porte||"").toUpperCase();
+    const nat=(d.natureza_juridica||"").toUpperCase();
+    const nome=d.razao_social||"";
+    const fantasia=d.nome_fantasia||"";
+    const sit=(d.descricao_situacao_cadastral||"").toUpperCase();
+    const dataAbertura=_formatarDataRF(d.data_inicio_atividade||d.abertura||"");
+
+    // ── Tipo / porte ──────────────────────────────────────
+    let tipo="",cor="",icone="";
+    if(porte==="MEI"||nat.includes("MICROEMPREENDEDOR")){tipo="MEI";cor="#20c9a6";icone="🟢";}
+    else if(nat.includes("UNIPESSOAL")){tipo="SLU";cor="#6f42c1";icone="🟣";}
+    else if(nat.includes("EIRELI")){tipo="EIRELI";cor="#6f42c1";icone="🟣";}
+    else if(nat.includes("LIMITADA")||nat.includes("LTDA")){tipo="LTDA";cor="#6f42c1";icone="🟣";}
+    else if(porte==="MICRO EMPRESA"){tipo="ME";cor="#4e73df";icone="🔵";}
+    else if(porte==="EMPRESA DE PEQUENO PORTE"){tipo="EPP";cor="#36b9cc";icone="🔵";}
+    else if(nat.includes("EMPRESÁRIO")){tipo="EI";cor="#fd7e14";icone="🟠";}
+    else{tipo=d.porte||"Outro";cor="#858796";icone="⚪";}
+
+    // ── Situação cadastral ────────────────────────────────
+    const ativa=sit.includes("ATIVA");
+    const sitBadge=ativa
+      ?`<span style="background:#d4edda;color:#155724;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;">✔ ATIVA</span>`
+      :`<span style="background:#f8d7da;color:#721c24;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;">⚠ ${sit||"INATIVA"}</span>`;
+
+    // ── PIX Automático ────────────────────────────────────
+    const aptoPix=["LTDA","SLU","EIRELI"].includes(tipo);
+    const pixBadge=aptoPix
+      ?`<span style="background:#d4edda;color:#155724;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;">✅ Apto ao PIX Automático</span>`
+      :`<span style="background:#f8d7da;color:#721c24;border-radius:10px;padding:1px 8px;font-size:10px;font-weight:700;">🚫 Não apto ao PIX Automático</span>`;
+
+    // ── Data de abertura ──────────────────────────────────
+    const dataHtml=dataAbertura
+      ?`<div style="display:flex;align-items:center;gap:5px;margin-top:5px;">
+          <span style="font-size:10px;color:#666;">📅 <b>Abertura:</b></span>
+          <span style="background:#f0f4ff;color:#4e73df;border-radius:8px;padding:1px 8px;font-size:11px;font-weight:700;">${dataAbertura}</span>
+        </div>`
+      :"";
+
+    // ── Card de aviso para não aptos ──────────────────────
+    const avisoHtml=!aptoPix
+      ?`<div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:6px 10px;margin-top:6px;font-size:11px;color:#856404;">
+          ⚠ Apenas <b>LTDA, SLU e EIRELI</b> são elegíveis ao PIX Automático. Esta empresa (${tipo}) não atende esse critério.
+        </div>`
+      :"";
+
+    el.innerHTML=`
+    <div style="background:#f9fbff;border:1px solid #d0d9f0;border-radius:8px;padding:8px 12px;margin-top:5px;font-size:12px;">
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:5px;">
+        <span style="background:${cor};color:white;font-weight:800;padding:2px 10px;border-radius:12px;font-size:12px;">${icone} ${tipo}</span>
+        ${sitBadge}
+        ${pixBadge}
+      </div>
+      <div style="font-weight:600;color:#1f2937;margin-bottom:1px;">${nome}</div>
+      ${fantasia&&fantasia!==nome?`<div style="color:#4e73df;font-size:11px;">Fantasia: ${fantasia}</div>`:""}
+      <div style="color:#888;font-size:10px;margin-top:1px;">${d.natureza_juridica||""}</div>
+      ${dataHtml}
+      ${avisoHtml}
+    </div>`;
+
+  }catch(e){
+    el.innerHTML=`<div style="display:inline-flex;align-items:center;gap:5px;background:#fff3cd;border:1px solid #f6c23e;border-radius:20px;padding:3px 10px;font-size:11px;color:#856404;margin-top:4px;">⚠ Não foi possível consultar o CNPJ</div>`;
+  }
+}
 function corStatus(s){return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguardando cliente":"#e91e8c","REENVIAR DOCUMENTO":"#fd7e14","COMERCIAL AGUARDANDO RESPOSTA DO CLIENTE":"#6f42c1","CLIENTE CIENTE DA PENDENCIA":"#36b9cc","Concluído":"#1cc88a","Encerrado":"#343a40","Cancelado":"#858796"}[s]||"#4e73df";}
 function corPrioridade(p){return{"Baixa":"#1cc88a","Normal":"#4e73df","Alta":"#f6c23e","Urgente":"#e74a3b"}[p]||"#4e73df";}
 function gerarId(){const nums=(tickets||[]).map(t=>String(t.id||"").trim()).map(v=>/^\d+$/.test(v)?parseInt(v):NaN).filter(n=>isFinite(n));const max=nums.length?Math.max(...nums):0;const seq=parseInt(localStorage.getItem("ticket_seq")||"0")||0;const prox=Math.max(max,seq)+1;localStorage.setItem("ticket_seq",String(prox));return String(prox);}
@@ -509,7 +617,7 @@ function novoTicket(){
           <select id="nt_titulo"><option value="">-- Selecione --</option><option>NOVO CREDENCIAMENTO</option><option>NOVO SERVIÇO</option></select>
         </div>
         <div><label><b>Nome Fantasia *</b></label><input id="nt_cliente" placeholder="Nome fantasia do cliente"></div>
-        <div><label><b>CNPJ / CPF</b></label><input id="nt_cnpj" placeholder="CNPJ ou CPF"></div>
+        <div><label><b>CNPJ / CPF</b></label><input id="nt_cnpj" placeholder="CNPJ ou CPF" onblur="consultarCNPJ('nt_cnpj','nt_cnpj_result')"><div id="nt_cnpj_result"></div></div>
         <div><label><b>Setor *</b></label><select id="nt_setor" onchange="filtrarRespNovo()"><option value="">-- Selecione --</option>${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}</select></div>
         <div><label><b>Responsável</b></label><select id="nt_responsavel"><option value="">-- Selecione o setor primeiro --</option></select></div>
         <div><label><b>Prioridade</b></label><select id="nt_prioridade"><option>Baixa</option><option selected>Normal</option><option>Alta</option><option>Urgente</option></select></div>
@@ -592,7 +700,7 @@ function verTicket(id,_rt=false){
           <select id="vt_titulo">${["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].map(op=>`<option ${t.titulo===op?"selected":""}>${op}</option>`).join("")}</select>
           ${!["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].includes(t.titulo)?`<div style="margin-top:4px;font-size:11px;color:#b07a00;background:#fff3cd;border:1px solid #ffeeba;padding:4px 8px;border-radius:5px;">Título legado: <b>${escHtml(t.titulo||"")}</b></div>`:""}
         </div>
-        <div><label><b>CNPJ / CPF</b></label><input id="vt_cnpj" value="${escHtml(t.cnpj||"")}"></div>
+        <div><label><b>CNPJ / CPF</b></label><input id="vt_cnpj" value="${escHtml(t.cnpj||"")}" onblur="consultarCNPJ('vt_cnpj','vt_cnpj_result')"><div id="vt_cnpj_result"></div></div>
         <div><label><b>Setor Atual</b></label><input value="${escHtml(t.setor||"")}" disabled style="background:#f5f5f5;color:#666;"></div>
         <div><label><b>Responsável</b></label>
           <select id="vt_responsavel"><option value="">-- Sem responsável --</option>${responsaveis.filter(r=>r.setor===t.setor).map(r=>`<option ${r.nome===t.responsavel?"selected":""}>${escHtml(r.nome)}</option>`).join("")}</select>
@@ -634,6 +742,7 @@ function verTicket(id,_rt=false){
       <h3 style="margin-top:0;">📋 Histórico / Log de Atualizações</h3>
       <div id="historicoLista">${renderHistorico(t.historico||[])}</div>
     </div>`;
+  if(t.cnpj)setTimeout(()=>consultarCNPJ('vt_cnpj','vt_cnpj_result'),100);
 }
 
 /* ============================================================
