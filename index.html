@@ -51,6 +51,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .tag-eligivel{background:#e74a3b;color:#fff;font-weight:800;padding:8px 10px;border-radius:8px;display:block;margin-top:8px;text-align:center;}
 .alerta-48h{display:inline-flex;align-items:center;gap:5px;background:#fff3cd;border:1px solid #f6c23e;color:#856404;padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;animation:pulse48 2s infinite;}
 @keyframes pulse48{0%,100%{opacity:1;}50%{opacity:.6;}}
+@keyframes fadeInUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
 .resumo-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:10px;}
 .resumo-card{color:white;border-radius:10px;padding:14px;text-align:center;cursor:pointer;}
 .resumo-num{font-size:28px;font-weight:bold;}
@@ -317,11 +318,59 @@ function corStatus(s){return{"Aberto":"#4e73df","Em andamento":"#f6c23e","Aguard
 function corPrioridade(p){return{"Baixa":"#1cc88a","Normal":"#4e73df","Alta":"#f6c23e","Urgente":"#e74a3b"}[p]||"#4e73df";}
 function gerarId(){const nums=(tickets||[]).map(t=>String(t.id||"").trim()).map(v=>/^\d+$/.test(v)?parseInt(v):NaN).filter(n=>isFinite(n));const max=nums.length?Math.max(...nums):0;const seq=parseInt(localStorage.getItem("ticket_seq")||"0")||0;const prox=Math.max(max,seq)+1;localStorage.setItem("ticket_seq",String(prox));return String(prox);}
 function padronizarIdsTickets(){const nums=(tickets||[]).map(t=>String(t.id||"").trim()).map(v=>/^\d+$/.test(v)?parseInt(v):NaN).filter(n=>isFinite(n));let max=nums.length?Math.max(...nums):0,mudou=false;(tickets||[]).forEach(t=>{const a=String(t.id||"").trim();if(!/^\d+$/.test(a)){max++;t.idLegacy=t.idLegacy||a;t.id=String(max);mudou=true;}});if(mudou)localStorage.setItem("ticket_seq",String(max));}
-function _logHistorico(idx,acao,tipo="sistema",meta={}){if(!tickets[idx].historico)tickets[idx].historico=[];const e={acao,usuario:usuarioLogado?.nome||"sistema",data:agora(),tipo};if(meta&&typeof meta==="object")Object.keys(meta).forEach(k=>e[k]=meta[k]);tickets[idx].historico.push(e);}
+function _logHistorico(idx,acao,tipo="sistema",meta={}){if(!tickets[idx].historico)tickets[idx].historico=[];const e={acao,usuario:usuarioLogado?.nome||"sistema",data:agora(),tipo};if(meta&&typeof meta==="object")Object.keys(meta).forEach(k=>e[k]=meta[k]);tickets[idx].historico.push(e);
+  /* Notificação por email ao dono comercial */
+  _tentarNotificarEmailComercial(idx,acao);
+}
 
-async function salvarTicket(t){try{if(t._id){const{_id,...d}=t;await db.collection("tickets").doc(_id).set(d,{merge:true});}else{const ref=await db.collection("tickets").add(Object.fromEntries(Object.entries(t).filter(([k])=>k!=='_id')));t._id=ref.id;}}catch(e){console.error("salvarTicket:",e);}}
+/* ============================================================
+   NOTIFICAÇÃO POR EMAIL AO DONO COMERCIAL
+   ============================================================ */
+let _emailQueue=[];let _emailTimer=null;
+function _tentarNotificarEmailComercial(idx,acao){
+  const t=tickets[idx];if(!t||!t.notificarEmailComercial)return;
+  const donoNome=_calcDonoComercial(t);if(!donoNome)return;
+  const email=_emailDonoComercial(t);if(!email)return;
+  _emailQueue.push({ticket:t,acao,email,donoNome,data:new Date().toLocaleString("pt-BR")});
+  if(_emailTimer)clearTimeout(_emailTimer);
+  _emailTimer=setTimeout(()=>{_enviarEmailsAgrupados();},2000);
+}
+function _enviarEmailsAgrupados(){
+  if(!_emailQueue.length)return;
+  const agrupado={};
+  _emailQueue.forEach(e=>{
+    const key=e.ticket.id+"_"+e.email;
+    if(!agrupado[key])agrupado[key]={ticket:e.ticket,email:e.email,donoNome:e.donoNome,acoes:[]};
+    agrupado[key].acoes.push(`[${e.data}] ${e.acao}`);
+  });
+  _emailQueue=[];
+  Object.values(agrupado).forEach(g=>{
+    const assunto=encodeURIComponent(`[CRM] Atualização no Ticket #${g.ticket.id} — ${g.ticket.cliente||""}`);
+    const corpo=encodeURIComponent(
+      `Olá ${g.donoNome},\n\nO Ticket #${g.ticket.id} (${g.ticket.cliente||""}) recebeu as seguintes atualizações:\n\n`+
+      g.acoes.map(a=>"• "+a).join("\n")+
+      `\n\nStatus atual: ${g.ticket.status}\nSetor: ${g.ticket.setor||""}\nResponsável: ${g.ticket.responsavel||"Sem responsável"}\n\n— CRM ElosGate`
+    );
+    window.open(`mailto:${g.email}?subject=${assunto}&body=${corpo}`,"_blank");
+    _mostrarToastEmail(g.donoNome,g.email,g.ticket.id);
+  });
+}
+function _mostrarToastEmail(nome,email,ticketId){
+  const toast=document.createElement("div");
+  toast.style.cssText="position:fixed;bottom:20px;right:20px;background:#1cc88a;color:white;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:9999;animation:fadeInUp .3s ease;max-width:360px;";
+  toast.innerHTML=`📧 Notificação preparada para <b>${escHtml(nome)}</b><br><span style="font-size:11px;opacity:.9;">${escHtml(email)} — Ticket #${ticketId}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(()=>{toast.style.opacity="0";toast.style.transition="opacity .5s";setTimeout(()=>toast.remove(),600);},4000);
+}
+
+async function salvarTicket(t){try{
+  /* Auto-persist dono fields */
+  const _sl=(t.setor||"").toLowerCase();
+  if(_sl.includes("comercial")&&!t.donoComercial){const d=_calcDonoComercial(t);if(d)t.donoComercial=d;}
+  if(_sl.includes("credenci")&&!t.donoCredenciamento){const d=_calcDonoCredenciamento(t);if(d)t.donoCredenciamento=d;}
+  if(t._id){const{_id,...d}=t;await db.collection("tickets").doc(_id).set(d,{merge:true});}else{const ref=await db.collection("tickets").add(Object.fromEntries(Object.entries(t).filter(([k])=>k!=='_id')));t._id=ref.id;}}catch(e){console.error("salvarTicket:",e);}}
 async function excluirTicketFirebase(id){try{await db.collection("tickets").doc(id).delete();}catch(e){console.error(e);}}
-async function salvarUsuario(u){try{const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||""};if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}}catch(e){console.error(e);}}
+async function salvarUsuario(u){try{const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||""};if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}}catch(e){console.error(e);}}
 async function excluirUsuarioFirebase(id){try{await db.collection("usuarios").doc(id).delete();}catch(e){console.error(e);}}
 async function salvarResponsavel(r){try{if(r._id){const{_id,...d}=r;await db.collection("responsaveis").doc(_id).set(d,{merge:true});}else{const ref=await db.collection("responsaveis").add({nome:r.nome,setor:r.setor});r._id=ref.id;}}catch(e){console.error(e);}}
 async function excluirResponsavelFirebase(id){try{await db.collection("responsaveis").doc(id).delete();}catch(e){console.error(e);}}
@@ -398,6 +447,84 @@ function servicoPrecisaAtualizacao48h(ticket,srv){if(["Concluído","Encerrado","
 function precisaAtualizacao48h(t){if(["Concluído","Encerrado","Cancelado"].includes(t.status))return false;if(!temServicoIniciado(t))return false;return(t.servicosTicket||[]).some(s=>servicoPrecisaAtualizacao48h(t,s))||horasDesdeUltimaAtualizacao(t)>=48;}
 const _ADQ=["BIN","CIELO","REDE","GETNET","PAGSEGURO"];
 function _isServicoAdquirente(n){const u=(n||"").toUpperCase();return _ADQ.some(k=>u.includes(k));}
+/* ============================================================
+   DONO DO TICKET POR SETOR (primeira pessoa a gravar atualização)
+   ============================================================ */
+function _calcDonoComercial(t){
+  if(t.donoComercial)return t.donoComercial;
+  if(t.abertoPorComercial)return t.abertoPorComercial;
+  const hist=(t.historico||[]);
+  for(const h of hist){
+    if(h.usuario&&h.usuario!=="sistema"&&h.tipo!=="sistema")return h.usuario;
+  }
+  return null;
+}
+function _calcDonoCredenciamento(t){
+  if(t.donoCredenciamento)return t.donoCredenciamento;
+  if(t.primeiroResponsavelCredenciamento)return t.primeiroResponsavelCredenciamento;
+  const srvs=t.servicosTicket||[];
+  for(const s of srvs){
+    if(s.iniciado?.responsavel)return s.iniciado.responsavel;
+  }
+  const hist=(t.historico||[]);
+  for(const h of hist){
+    if(h.usuario&&h.usuario!=="sistema"&&(h.tipo==="atualizacao48h"||h.tipo==="info_adicional"||(h.acao||"").includes("INICIADO")||(h.acao||"").includes("ATUALIZADO")))return h.usuario;
+  }
+  return null;
+}
+async function _persistirDono(idx){
+  const t=tickets[idx];if(!t)return;
+  let mudou=false;
+  const setorLow=(t.setor||"").toLowerCase();
+  if(setorLow.includes("comercial")&&!t.donoComercial){
+    const d=_calcDonoComercial(t);if(d){t.donoComercial=d;mudou=true;}
+  }
+  if(setorLow.includes("credenci")&&!t.donoCredenciamento){
+    const d=_calcDonoCredenciamento(t);if(d){t.donoCredenciamento=d;mudou=true;}
+  }
+  if(mudou)await salvarTicket(t);
+}
+function _renderDonoEtiquetas(t){
+  const donoC=_calcDonoComercial(t);
+  const donoCr=_calcDonoCredenciamento(t);
+  let html="";
+  if(donoC)html+=`<span style="display:inline-flex;align-items:center;gap:4px;background:#eef2ff;border:1px solid #4e73df;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:#4e73df;margin-right:6px;">🏷️ Dono Comercial: <b>${escHtml(donoC)}</b></span>`;
+  if(donoCr)html+=`<span style="display:inline-flex;align-items:center;gap:4px;background:#e8faf0;border:1px solid #1cc88a;border-radius:20px;padding:3px 10px;font-size:11px;font-weight:600;color:#0d6b40;">🏷️ Dono Credenciamento: <b>${escHtml(donoCr)}</b></span>`;
+  return html?`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:6px;">${html}</div>`:"";
+}
+function _emailDonoComercial(t){
+  const donoNome=_calcDonoComercial(t);if(!donoNome)return null;
+  const u=usuarios.find(x=>(x.nome||"").toLowerCase()===donoNome.toLowerCase());
+  return u?.email||null;
+}
+/* ============================================================
+   VERIFICAR SE TICKET PERTENCE AO USUÁRIO LOGADO
+   Considera: abertoPor, responsável, dono comercial/credenciamento,
+   serviços iniciados/finalizados/atualizados pelo usuário
+   ============================================================ */
+function _isTicketMeu(t){
+  if(!usuarioLogado)return false;
+  const nl=(usuarioLogado.nome||"").toLowerCase();
+  if((t.abertoPor||"").toLowerCase()===nl)return true;
+  if((t.responsavel||"").toLowerCase()===nl)return true;
+  if((t.abertoPorComercial||"").toLowerCase()===nl)return true;
+  if((t.donoComercial||"").toLowerCase()===nl)return true;
+  if((t.donoCredenciamento||"").toLowerCase()===nl)return true;
+  if((t.primeiroResponsavelCredenciamento||"").toLowerCase()===nl)return true;
+  const srvs=t.servicosTicket||[];
+  for(const s of srvs){
+    if((s.iniciado?.responsavel||"").toLowerCase()===nl)return true;
+    if((s.finalizado?.responsavel||"").toLowerCase()===nl)return true;
+    if((s.assinatura?.responsavel||"").toLowerCase()===nl)return true;
+    const atualiz=s.atualizacoes||[];
+    for(const a of atualiz){if((a.responsavel||"").toLowerCase()===nl)return true;}
+  }
+  const hist=t.historico||[];
+  for(const h of hist){
+    if(h.usuario&&h.usuario!=="sistema"&&h.usuario.toLowerCase()===nl)return true;
+  }
+  return false;
+}
 function temAdquirenteLiberada(t){if(["Concluído","Encerrado","Cancelado"].includes(t.status))return false;return(t.servicosTicket||[]).some(s=>_isServicoAdquirente(s.nome)&&s.finalizado?.marcado);}
 function horasNoCredenciamento(t){const r=t.dataChegadaCredenciamento||t.dataAbertura;if(!r)return 0;return(Date.now()-new Date(r))/3600000;}
 function horasDesdeTransferenciaComercial(t){const r=t.dataTransferenciaComercial;if(!r)return 0;return(Date.now()-new Date(r))/3600000;}
@@ -439,6 +566,7 @@ function abaUsuarios(){
         <div><label style="font-size:11px;color:#666;">Perfil</label><select id="novoUserPerfil"><option value="auxiliar">Auxiliar</option><option value="adm">ADM</option></select></div>
         <div><label style="font-size:11px;color:#666;">Setor</label><select id="novoUserSetor"><option value="">-- Nenhum --</option>${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}</select></div>
         <div><label style="font-size:11px;color:#666;">Senha</label><input id="novoUserSenha" type="password" placeholder="Senha de acesso"></div>
+        <div><label style="font-size:11px;color:#666;">📧 E-mail</label><input id="novoUserEmail" type="email" placeholder="email@empresa.com"></div>
       </div>
       <button class="btn-success" style="margin-top:10px;" onclick="addUsuario()">+ Adicionar Usuário</button>
     </div>
@@ -450,6 +578,7 @@ function abaUsuarios(){
         <div><label style="font-size:11px;color:#666;">Perfil</label><select id="eu-perfil-${i}"><option value="auxiliar" ${u.perfil==="auxiliar"?"selected":""}>Auxiliar</option><option value="adm" ${u.perfil==="adm"?"selected":""}>ADM</option></select></div>
         <div><label style="font-size:11px;color:#666;">Setor</label><select id="eu-setor-${i}"><option value="">-- Nenhum --</option>${setores.map(s=>`<option ${s===u.setor?"selected":""}>${escHtml(s)}</option>`).join("")}</select></div>
         <div><label style="font-size:11px;color:#666;">Nova senha</label><input id="eu-senha-${i}" type="password" placeholder="deixe em branco para manter"></div>
+        <div><label style="font-size:11px;color:#666;">📧 E-mail</label><input id="eu-email-${i}" type="email" value="${escHtml(u.email||"")}" placeholder="email@empresa.com"></div>
       </div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-info" onclick="salvarEdicaoUsuario(${i})">💾 Salvar</button>
@@ -457,8 +586,8 @@ function abaUsuarios(){
       </div>
     </div>`).join("")}`;
 }
-async function addUsuario(){const n=document.getElementById("novoUserNome").value.trim(),p=document.getElementById("novoUserPerfil").value,s=document.getElementById("novoUserSetor").value,se=document.getElementById("novoUserSenha").value;if(!n){alert("Informe o nome.");return;}const novo={nome:n,perfil:p,setor:s,senha:se};usuarios.push(novo);await salvarUsuario(novo);abaUsuarios();}
-async function salvarEdicaoUsuario(i){const n=document.getElementById("eu-nome-"+i).value.trim(),p=document.getElementById("eu-perfil-"+i).value,s=document.getElementById("eu-setor-"+i).value,ns=document.getElementById("eu-senha-"+i).value;if(!n){alert("Nome vazio.");return;}usuarios[i].nome=n;usuarios[i].perfil=p;usuarios[i].setor=s;if(ns!=="")usuarios[i].senha=ns;await salvarUsuario(usuarios[i]);alert("Usuário salvo!");}
+async function addUsuario(){const n=document.getElementById("novoUserNome").value.trim(),p=document.getElementById("novoUserPerfil").value,s=document.getElementById("novoUserSetor").value,se=document.getElementById("novoUserSenha").value,em=(document.getElementById("novoUserEmail")?.value||"").trim();if(!n){alert("Informe o nome.");return;}const novo={nome:n,perfil:p,setor:s,senha:se,email:em};usuarios.push(novo);await salvarUsuario(novo);abaUsuarios();}
+async function salvarEdicaoUsuario(i){const n=document.getElementById("eu-nome-"+i).value.trim(),p=document.getElementById("eu-perfil-"+i).value,s=document.getElementById("eu-setor-"+i).value,ns=document.getElementById("eu-senha-"+i).value,em=(document.getElementById("eu-email-"+i)?.value||"").trim();if(!n){alert("Nome vazio.");return;}usuarios[i].nome=n;usuarios[i].perfil=p;usuarios[i].setor=s;usuarios[i].email=em;if(ns!=="")usuarios[i].senha=ns;await salvarUsuario(usuarios[i]);alert("Usuário salvo!");}
 async function excluirUsuario(i){if(!confirm(`Excluir "${usuarios[i].nome}"?`))return;const u=usuarios[i];if(u._id)await excluirUsuarioFirebase(u._id);usuarios.splice(i,1);abaUsuarios();}
 
 /* ============================================================
@@ -550,7 +679,7 @@ function filtrarTickets(){
   else if(alerta==="iniciados")lista=lista.filter(t=>temServicoIniciado(t));
   else if(alerta==="adquirentes_lib")lista=lista.filter(t=>temAdquirenteLiberada(t));
   else if(alerta==="concluidos")lista=lista.filter(t=>["Concluído","Cancelado"].includes(t.status));
-  if(document.getElementById("filtroMeusTickets")?.checked&&usuarioLogado){const nl=(usuarioLogado.nome||"").toLowerCase();lista=lista.filter(t=>(t.abertoPor||"").toLowerCase()===nl);}
+  if(document.getElementById("filtroMeusTickets")?.checked&&usuarioLogado){lista=lista.filter(t=>_isTicketMeu(t));}
   if(respFiltro)lista=lista.filter(t=>{if((t.responsavel||"")===respFiltro)return true;return(t.servicosTicket||[]).some(s=>(s.iniciado?.responsavel||"")===respFiltro||(s.finalizado?.responsavel||"")===respFiltro);});
   if(busca){lista=lista.filter(t=>{const txt=(t.titulo||"").toLowerCase().includes(busca)||(t.cliente||"").toLowerCase().includes(busca)||(t.id||"").toLowerCase().includes(busca)||(t.responsavel||"").toLowerCase().includes(busca);const cnpjT=normalizarCnpj(t.cnpj||"");const cnpjMatch=buscaCnpj.length>=3&&cnpjT.includes(buscaCnpj);return txt||cnpjMatch;});}
   const c=document.getElementById("contadorTickets");if(c)c.textContent=`${lista.length} ticket(s)`;
@@ -697,7 +826,7 @@ function verTicket(id,_rt=false){
       </div>
       ${pendCliente&&t.pendenciaCliente?`<div style="background:#fce4ec;border:1px solid #e91e8c;border-radius:8px;padding:12px;margin-bottom:14px;"><b style="color:#e91e8c;">💗 Pendência do Cliente</b><br><span style="font-size:13px;color:#880e4f;white-space:pre-wrap;">${escHtml(t.pendenciaCliente)}</span><div style="font-size:11px;color:#999;margin-top:6px;">Registrado por <b>${escHtml(t.pendenciaClienteResp||"")}</b> em ${formatarData(t.pendenciaClienteData||"")}</div></div>`:""}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;" class="grid-2col">
-        <div style="grid-column:1/-1;"><label><b>Nome Fantasia *</b></label><input id="vt_cliente" value="${escHtml(t.cliente||"")}" style="font-size:15px;font-weight:600;"></div>
+        <div style="grid-column:1/-1;"><label><b>Nome Fantasia *</b></label><input id="vt_cliente" value="${escHtml(t.cliente||"")}" style="font-size:15px;font-weight:600;">${_renderDonoEtiquetas(t)}</div>
         <div style="grid-column:1/-1;"><label><b>Título</b></label>
           <select id="vt_titulo">${["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].map(op=>`<option ${t.titulo===op?"selected":""}>${op}</option>`).join("")}</select>
           ${!["NOVO CREDENCIAMENTO","NOVO SERVIÇO"].includes(t.titulo)?`<div style="margin-top:4px;font-size:11px;color:#b07a00;background:#fff3cd;border:1px solid #ffeeba;padding:4px 8px;border-radius:5px;">Título legado: <b>${escHtml(t.titulo||"")}</b></div>`:""}
@@ -731,6 +860,13 @@ function verTicket(id,_rt=false){
           <span style="font-size:12px;color:#666;">Ao gravar, será registrado no histórico.</span>
         </div>
       </div>
+      ${_calcDonoComercial(t)?`<div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:8px;padding:10px 14px;margin-top:14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;font-weight:600;color:#374151;">
+          <input type="checkbox" id="vt_notif_email" ${t.notificarEmailComercial?"checked":""} onchange="toggleNotifEmail('${t.id}',this.checked)">
+          📧 Notificar dono comercial por e-mail a cada alteração
+        </label>
+        <span style="font-size:11px;color:#888;">${(()=>{const em=_emailDonoComercial(t);return em?`(${escHtml(em)})`:`<span style="color:#e74a3b;">⚠ Dono "${escHtml(_calcDonoComercial(t))}" sem email cadastrado. Cadastre em Usuários.</span>`;})()}</span>
+      </div>`:``}
       <div class="ticket-actions" style="margin-top:18px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-primary" onclick="atualizarTicket('${t.id}')">💾 Salvar Alterações</button>
         <button class="btn-purple" onclick="abrirModalTransf('${t.id}')">🔀 Transferir Setor</button>
@@ -814,6 +950,19 @@ async function atualizarTicket(id){
   tickets[idx].ultimaAtualizacao=agr;
   if(mudancas.length)_logHistorico(idx,"Ticket atualizado: "+mudancas.join(" | "));
   await salvarTicket(tickets[idx]);verTicket(id);
+}
+
+async function toggleNotifEmail(ticketId,checked){
+  const idx=tickets.findIndex(t=>t.id===ticketId);if(idx<0)return;
+  tickets[idx].notificarEmailComercial=checked;
+  if(checked){
+    const email=_emailDonoComercial(tickets[idx]);
+    if(!email){
+      alert("⚠️ O dono comercial ("+(_calcDonoComercial(tickets[idx])||"?")+") não possui e-mail cadastrado.\n\nCadastre o e-mail em Cadastros → Usuários para que as notificações funcionem.");
+    }
+  }
+  _logHistorico(idx,`Notificação por e-mail ao dono comercial ${checked?"ATIVADA":"DESATIVADA"}`);
+  await salvarTicket(tickets[idx]);
 }
 
 async function excluirTicket(id){
@@ -1373,6 +1522,7 @@ class="dash-grid">
             <option value="pendentes">Apenas tickets em aberto</option>
             <option value="concluidos">Apenas tickets finalizados</option>
           </select>
+          <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;margin-left:10px;"><input type="checkbox" id="acomp_meus_tickets" onchange="renderAcompanhamentoClientes(document.getElementById('acomp_filtro').value)"> Somente meus tickets</label>
         </div>
         <div id="acompanhamentoClientesWrap"></div>
       </div>
@@ -1720,7 +1870,12 @@ function renderAcompanhamentoClientes(filtro,listaBase){
     if(setorFiltro)lista=lista.filter(t=>t.setor===setorFiltro);
   }
 
-  /* === PAINEL RESUMO — calcula sobre TODOS os tickets pendentes com serviços === */
+  /* Filtro: somente meus tickets — aplica antes do resumo para números coerentes */
+  if(document.getElementById("acomp_meus_tickets")?.checked&&usuarioLogado){
+    lista=lista.filter(t=>_isTicketMeu(t));
+  }
+
+  /* === PAINEL RESUMO — calcula sobre tickets pendentes com serviços === */
   if(summaryWrap){
     const pendentes=lista.filter(t=>!["Concluído","Cancelado","Encerrado"].includes(t.status)&&(t.servicosTicket||[]).length>0);
     const buckets=[
