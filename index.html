@@ -135,6 +135,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <button class="btn-primary" onclick="mostrarTickets();closeSidebar()">🎫 Tickets</button>
     <button class="btn-success" id="btnCadastros" onclick="mostrarCadastros();closeSidebar()">📋 CADASTROS</button>
     <button style="background:#6f42c1;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white;font-size:12px;margin-bottom:10px;width:100%;" id="btnDashboard" onclick="mostrarDashboard();closeSidebar()">📊 DASHBOARDS</button>
+    <button style="background:#0d6efd;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white;font-size:12px;margin-bottom:10px;width:100%;" id="btnTarefas" onclick="mostrarTarefas();closeSidebar()">✅ TAREFAS</button>
     <label style="font-size:12px;opacity:.7;margin-top:4px;">Visão:</label>
     <select id="filtroVisao" onchange="mostrarTickets()"></select>
     <hr style="border-color:#374151;margin:12px 0;">
@@ -401,6 +402,7 @@ function _atualizarTelaAtual(){
     if(_telaAtual==="tickets"){const el=document.getElementById("listaTickets");if(el){try{filtrarTickets();}catch(e){mostrarTickets();}}else mostrarTickets();return;}
     if(_telaAtual==="cadastros"){try{mostrarCadastros();}catch(e){}return;}
     if(_telaAtual==="dashboard"){try{atualizarDashboard();}catch(e){}return;}
+    if(_telaAtual==="tarefas"){try{mostrarTarefas();}catch(e){}return;}
   }catch(e){console.error("_atualizarTelaAtual:",e);}
 }
 function iniciarRealtime(){
@@ -445,7 +447,7 @@ function precisaIniciarCredenciamento(t){if(["Concluído","Encerrado","Cancelado
 function estaPendenciaCliente(t){return t.status==="Aguardando cliente";}
 function servicoPrecisaAtualizacao48h(ticket,srv){if(["Concluído","Encerrado","Cancelado"].includes(ticket.status))return false;if(!srv.iniciado?.marcado||srv.finalizado?.marcado||srv.expirado?.marcado)return false;const r=srv.ultimaAtualizacaoServico||srv.iniciado?.data||ticket.ultimaAtualizacao||ticket.dataAbertura;if(!r)return false;return(Date.now()-new Date(r))/3600000>=48;}
 function precisaAtualizacao48h(t){if(["Concluído","Encerrado","Cancelado"].includes(t.status))return false;if(!temServicoIniciado(t))return false;return(t.servicosTicket||[]).some(s=>servicoPrecisaAtualizacao48h(t,s))||horasDesdeUltimaAtualizacao(t)>=48;}
-const _ADQ=["BIN","CIELO","REDE","GETNET","PAGSEGURO"];
+const _ADQ=["BIN","CIELO","REDE","GETNET","PAGSEGURO","STONE"];
 function _isServicoAdquirente(n){const u=(n||"").toUpperCase();return _ADQ.some(k=>u.includes(k));}
 /* ============================================================
    DONO DO TICKET POR SETOR (primeira pessoa a gravar atualização)
@@ -453,6 +455,8 @@ function _isServicoAdquirente(n){const u=(n||"").toUpperCase();return _ADQ.some(
 function _calcDonoComercial(t){
   if(t.donoComercial)return t.donoComercial;
   if(t.abertoPorComercial)return t.abertoPorComercial;
+  /* Quem criou o ticket é o dono natural — evita pegar o primeiro que agiu no histórico */
+  if(t.abertoPor)return t.abertoPor;
   const hist=(t.historico||[]);
   for(const h of hist){
     if(h.usuario&&h.usuario!=="sistema"&&h.tipo!=="sistema")return h.usuario;
@@ -785,7 +789,7 @@ async function salvarNovoTicket(){
   const canal=document.getElementById("nt_canal").value;
   if(!titulo){alert("Selecione o título.");return;}if(!cliente){alert("Informe o cliente.");return;}if(!setor){alert("Selecione o setor.");return;}
   const agr=agora();const isComercial=(setor||"").toLowerCase().includes("comercial");
-  const ticket={id:gerarId(),titulo,cliente,cnpj,setor,responsavel,prioridade,status,canal,descricao:"",obs:"",abertoPor:usuarioLogado.nome,abertoPorComercial:isComercial?usuarioLogado.nome:"",primeiroResponsavelCredenciamento:"",dataAbertura:agr,ultimaAtualizacao:agr,dataChegadaCredenciamento:(setor||"").toLowerCase().includes("credenci")?agr:null,dataTransferenciaComercial:isComercial?agr:null,servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),observacoes:[],aguardandoClienteAcumuladoMs:0,aguardandoClienteInicio:null,encerramento:null,historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]};
+  const ticket={id:gerarId(),titulo,cliente,cnpj,setor,responsavel,prioridade,status,canal,descricao:"",obs:"",abertoPor:usuarioLogado.nome,abertoPorComercial:isComercial?usuarioLogado.nome:"",donoComercial:isComercial?usuarioLogado.nome:"",primeiroResponsavelCredenciamento:"",dataAbertura:agr,ultimaAtualizacao:agr,dataChegadaCredenciamento:(setor||"").toLowerCase().includes("credenci")?agr:null,dataTransferenciaComercial:isComercial?agr:null,servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),observacoes:[],aguardandoClienteAcumuladoMs:0,aguardandoClienteInicio:null,encerramento:null,historico:[{acao:"Ticket criado",usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]};
   tickets.unshift(ticket);await salvarTicket(ticket);_srvTemp=[];mostrarTickets();
 }
 
@@ -1506,6 +1510,21 @@ class="dash-grid">
         <p>Tickets com mais tempo aguardando resposta do cliente</p>
         <canvas id="chartPendCliente" height="220"></canvas>
       </div>
+      <div class="dash-card" style="margin-bottom:18px;border-top-color:#e74a3b;">
+        <h4>🏦 Painel de Adquirentes — BIN · CIELO · REDE · GETNET · PAGSEGURO · STONE</h4>
+        <p>Monitoramento dos serviços de adquirentes: tickets fora da SLA de atualização e liberações que geram receita para a ElosGate</p>
+        <div class="dash-filter-row" style="margin-bottom:12px;">
+          <label>Período liberações:</label>
+          <select id="adq_periodo" onchange="renderPainelAdquirentes()">
+            <option value="7">Últimos 7 dias</option>
+            <option value="30" selected>Últimos 30 dias</option>
+            <option value="90">Últimos 90 dias</option>
+            <option value="365">Último ano</option>
+            <option value="todos">Todo período</option>
+          </select>
+        </div>
+        <div id="painelAdquirentesWrap"></div>
+      </div>
       <div class="dash-card" style="margin-bottom:18px;border-top-color:#fd7e14;">
         <h4>📅 Produção Mensal — Tickets e Serviços Finalizados</h4>
         <p>Liberações por mês/ano, médias de produção e serviços em atraso há mais de 30 dias</p>
@@ -1721,9 +1740,336 @@ function atualizarDashboard(){
   const acompFiltroEl=document.getElementById("acomp_filtro");
   renderAcompanhamentoClientes(acompFiltroEl?acompFiltroEl.value:"todos",lista);
 
-  /* 9. Painel produção mensal */
+  /* 9. Painel adquirentes */
+  renderPainelAdquirentes();
+  /* 10. Painel produção mensal */
   renderPainelProducao(lista);
 }
+
+/* ============================================================
+   PAINEL ADQUIRENTES — SLA e Receita
+   ============================================================ */
+function renderPainelAdquirentes(){
+  const wrap=document.getElementById("painelAdquirentesWrap");
+  if(!wrap)return;
+  const periodoEl=document.getElementById("adq_periodo");
+  const periodoVal=periodoEl?periodoEl.value:"30";
+  const now=Date.now();
+  const MESES_PT=["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  const nomeMes=key=>{const[y,m]=key.split("-");return`${MESES_PT[parseInt(m)-1]}/${y.slice(2)}`;};
+  const curMesKey=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,"0")}`;
+
+  /* Base: tickets visíveis + filtro de setor do dashboard */
+  const setorFiltro=document.getElementById("dash_setor")?.value||"";
+  let baseTk=ticketsVisiveis();
+  if(setorFiltro)baseTk=baseTk.filter(t=>t.setor===setorFiltro);
+
+  /* ── helpers ─────────────────────────────────────────────────── */
+  /* Retorna o tipo de adquirente (keyword do _ADQ) de um serviço, ou null */
+  function _tipoAdq(nomeServico){
+    const u=(nomeServico||"").toUpperCase();
+    return _ADQ.find(k=>u.includes(k))||null;
+  }
+  /* SLA do catálogo para um serviço (horas) */
+  function _slaHoras(nomeServico){
+    const sc=servicosCadastro.find(c=>c.nome===nomeServico);
+    return sc&&sc.sla?sc.sla:null;
+  }
+  /* Horas decorridas desde abertura do ticket até agora (ou até finalização) */
+  function _horasDecorridas(ticket,srv){
+    const inicio=new Date(ticket.dataAbertura).getTime();
+    const fim=srv.finalizado?.marcado&&srv.finalizado.data?new Date(srv.finalizado.data).getTime():now;
+    return(fim-inicio)/3600000;
+  }
+
+  /* ── SEÇÃO 1: tickets com adquirente FORA da SLA do CADASTRO ── */
+  /* Fora da SLA do cadastro = tempo decorrido desde dataAbertura
+     já excedeu as horas de SLA registradas para o serviço.       */
+  const foraSlaCad=baseTk.filter(t=>{
+    if(["Concluído","Cancelado","Encerrado"].includes(t.status))return false;
+    return(t.servicosTicket||[]).some(s=>{
+      if(!_tipoAdq(s.nome))return false;
+      if(!s.iniciado?.marcado||s.finalizado?.marcado||s.expirado?.marcado)return false;
+      const slaH=_slaHoras(s.nome);
+      if(!slaH)return false;
+      return _horasDecorridas(t,s)>slaH;
+    });
+  });
+
+  /* Detalhamento por ticket para listagem */
+  const foraByTipo={};
+  foraSlaCad.forEach(t=>{
+    (t.servicosTicket||[]).forEach(s=>{
+      const tipo=_tipoAdq(s.nome);
+      if(!tipo||!s.iniciado?.marcado||s.finalizado?.marcado||s.expirado?.marcado)return;
+      const slaH=_slaHoras(s.nome);
+      if(!slaH)return;
+      const dec=_horasDecorridas(t,s);
+      if(dec<=slaH)return;
+      if(!foraByTipo[tipo])foraByTipo[tipo]=[];
+      foraByTipo[tipo].push({
+        ticketId:t.id,
+        cliente:t.cliente||"",
+        responsavel:t.responsavel||"",
+        servico:s.nome,
+        slaH,
+        atrasoH:Math.round(dec-slaH),
+        decH:Math.round(dec),
+      });
+    });
+  });
+  Object.values(foraByTipo).forEach(arr=>arr.sort((a,b)=>b.atrasoH-a.atrasoH));
+
+  /* ── SEÇÃO 2: Ranking — qual adquirente atrasa mais ──────────── */
+  /* Olha TODOS os tickets da base (sem filtro de período)
+     para ter uma visão completa do histórico de cada tipo.        */
+  const rankStats={};
+  _ADQ.forEach(k=>{rankStats[k]={tipo:k,total:0,dentroSLA:0,foraSLA:0,totalAtrH:0,abertos:0,abertosFora:0};});
+
+  baseTk.forEach(t=>{
+    (t.servicosTicket||[]).forEach(s=>{
+      const tipo=_tipoAdq(s.nome);
+      if(!tipo)return;
+      const slaH=_slaHoras(s.nome);
+      if(!slaH)return;
+      const st=rankStats[tipo];
+      st.total++;
+      const dec=_horasDecorridas(t,s);
+
+      if(s.finalizado?.marcado){
+        // Finalizado: entregue dentro ou fora do SLA
+        if(dec<=slaH){st.dentroSLA++;}
+        else{st.foraSLA++;st.totalAtrH+=dec-slaH;}
+      } else if(s.expirado?.marcado){
+        st.foraSLA++;
+        if(dec>slaH)st.totalAtrH+=dec-slaH;
+      } else if(s.iniciado?.marcado){
+        // Em aberto
+        st.abertos++;
+        if(dec>slaH){st.abertosFora++;st.totalAtrH+=dec-slaH;}
+      }
+    });
+  });
+
+  const rankArr=Object.values(rankStats)
+    .filter(x=>x.total>0)
+    .map(x=>{
+      const atrasados=x.foraSLA+x.abertosFora;
+      const concluidos=x.dentroSLA+x.foraSLA;
+      const taxaAtraso=x.total?Math.round((atrasados/x.total)*100):0;
+      const mediaAtr=atrasados>0?Math.round(x.totalAtrH/atrasados):0;
+      return{...x,atrasados,concluidos,taxaAtraso,mediaAtr};
+    })
+    .sort((a,b)=>b.taxaAtraso-a.taxaAtraso||b.mediaAtr-a.mediaAtr);
+
+  const maxTaxaRank=Math.max(1,...rankArr.map(x=>x.taxaAtraso));
+
+  /* ── SEÇÃO 3: Liberações no período selecionado ─────────────── */
+  const msLimite=periodoVal==="todos"?0:(now-parseInt(periodoVal)*86400000);
+  const liberadas=[];
+  baseTk.forEach(t=>{
+    (t.servicosTicket||[]).forEach(s=>{
+      if(_tipoAdq(s.nome)&&s.finalizado?.marcado&&s.finalizado.data){
+        const d=new Date(s.finalizado.data);
+        if(d.getTime()>=msLimite){
+          const slaH=_slaHoras(s.nome);
+          const dec=(d-new Date(t.dataAbertura))/3600000;
+          liberadas.push({data:d,nome:s.nome,tipo:_tipoAdq(s.nome)||"",cliente:t.cliente||"",ticketId:t.id,responsavel:s.finalizado.responsavel||"",dentroSLA:slaH?dec<=slaH:null,atrasoH:slaH&&dec>slaH?Math.round(dec-slaH):0});
+        }
+      }
+    });
+  });
+  liberadas.sort((a,b)=>b.data-a.data);
+
+  const limSem=now-7*86400000,limMes=now-30*86400000,limAno=now-365*86400000;
+  const qtdSem=liberadas.filter(x=>x.data.getTime()>=limSem).length;
+  const qtdMes=liberadas.filter(x=>x.data.getTime()>=limMes).length;
+  const qtdAno=liberadas.filter(x=>x.data.getTime()>=limAno).length;
+
+  const porMes={};
+  liberadas.forEach(x=>{const key=`${x.data.getFullYear()}-${String(x.data.getMonth()+1).padStart(2,"0")}`;porMes[key]=(porMes[key]||0)+1;});
+  const mesesAdq=[...Object.keys(porMes)].sort();
+  const maxBar=Math.max(1,...Object.values(porMes));
+
+  /* ── RENDER ──────────────────────────────────────────────────── */
+  wrap.innerHTML=`
+
+  <!-- ════ BLOCO 1: FORA DA SLA DO CADASTRO ════ -->
+  <div style="margin-bottom:24px;">
+    <div style="font-size:13px;font-weight:700;color:#c0392b;margin-bottom:10px;display:flex;align-items:center;flex-wrap:wrap;gap:8px;">
+      🚨 Adquirentes fora da SLA do cadastro (serviços em aberto além do prazo cadastrado)
+      ${foraSlaCad.length===0
+        ?`<span style="color:#1cc88a;font-weight:600;">✅ Tudo dentro do prazo!</span>`
+        :`<span style="background:#e74a3b;color:white;padding:2px 10px;border-radius:12px;font-size:12px;">${foraSlaCad.length} ticket(s)</span>`}
+    </div>
+    ${foraSlaCad.length===0
+      ?`<div style="background:#d4edda;border:1px solid #1cc88a;border-radius:8px;padding:12px 16px;font-size:13px;color:#155724;font-weight:600;">✅ Nenhum serviço de adquirente em aberto está além do prazo (SLA) cadastrado. Ótimo trabalho!</div>`
+      :`<div>
+        <!-- Cards por tipo de adquirente -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px;margin-bottom:12px;">
+          ${Object.entries(foraByTipo).sort((a,b)=>b[1].length-a[1].length).map(([tipo,itens])=>`
+          <div style="background:#fff8f8;border:2px solid #e74a3b;border-radius:10px;padding:12px;">
+            <div style="font-size:13px;font-weight:800;color:#c0392b;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;">
+              <span>🏦 ${escHtml(tipo)}</span>
+              <span style="background:#e74a3b;color:white;border-radius:10px;padding:1px 8px;font-size:11px;">${itens.length} ticket(s)</span>
+            </div>
+            ${itens.slice(0,6).map(it=>`
+            <div style="font-size:11px;padding:4px 0;border-bottom:1px solid #fdd;cursor:pointer;display:flex;justify-content:space-between;align-items:flex-start;gap:6px;" onclick="verTicket('${it.ticketId}')">
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(it.cliente)} <span style="color:#aaa;font-weight:400;">#${it.ticketId}</span></div>
+                <div style="color:#888;font-size:10px;margin-top:1px;">SLA: ${it.slaH}h &bull; Decorrido: ${it.decH}h</div>
+              </div>
+              <span style="color:#e74a3b;font-weight:800;white-space:nowrap;flex-shrink:0;">+${it.atrasoH}h</span>
+            </div>`).join("")}
+            ${itens.length>6?`<div style="font-size:10px;color:#999;margin-top:5px;text-align:center;">+${itens.length-6} mais</div>`:""}
+          </div>`).join("")}
+        </div>
+        <!-- Lista completa -->
+        <div style="background:#fff8f8;border:1px solid #f5c6cb;border-radius:8px;padding:10px 14px;max-height:220px;overflow-y:auto;">
+          <div style="font-size:11px;font-weight:700;color:#721c24;margin-bottom:8px;">📋 Lista completa (${foraSlaCad.length} tickets com adquirente além do prazo):</div>
+          ${foraSlaCad.map(t=>{
+            const itens=(t.servicosTicket||[]).filter(s=>{const tipo=_tipoAdq(s.nome);if(!tipo||!s.iniciado?.marcado||s.finalizado?.marcado)return false;const sH=_slaHoras(s.nome);return sH&&_horasDecorridas(t,s)>sH;});
+            return`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #fdd;cursor:pointer;" onclick="verTicket('${t.id}')">
+              <span style="font-size:11px;font-weight:800;color:#e74a3b;width:32px;flex-shrink:0;">#${t.id}</span>
+              <span style="font-size:11px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600;">${escHtml(t.cliente||"")}</span>
+              <span style="font-size:10px;color:#666;">${itens.map(s=>`${escHtml(s.nome)} (+${Math.round(_horasDecorridas(t,s)-(_slaHoras(s.nome)||0))}h)`).join(" · ")}</span>
+            </div>`;
+          }).join("")}
+        </div>
+      </div>`
+    }
+  </div>
+
+  <!-- ════ BLOCO 2: RANKING — QUAL ADQUIRENTE ATRASA MAIS ════ -->
+  <div style="border-top:2px solid #e3e6f0;padding-top:20px;margin-bottom:24px;">
+    <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:14px;">
+      📊 Ranking — Qual Adquirente Atrasa Mais
+      <span style="font-size:11px;font-weight:400;color:#888;margin-left:8px;">Baseado na SLA registrada em cada serviço do cadastro</span>
+    </div>
+    ${rankArr.length===0
+      ?`<p style="color:#aaa;font-size:12px;">Sem dados suficientes.</p>`
+      :`<div style="display:flex;flex-direction:column;gap:10px;margin-bottom:14px;">
+        ${rankArr.map((x,i)=>{
+          const medalha=i===0?"🥇":i===1?"🥈":i===2?"🥉":`#${i+1}`;
+          const corBar=x.taxaAtraso>=70?"#e74a3b":x.taxaAtraso>=40?"#f6c23e":"#1cc88a";
+          const corTxt=x.taxaAtraso>=70?"#721c24":x.taxaAtraso>=40?"#856404":"#155724";
+          const barW=Math.round((x.taxaAtraso/maxTaxaRank)*100);
+          return`<div style="background:white;border:1px solid #e3e6f0;border-radius:10px;padding:12px 16px;box-shadow:0 2px 6px rgba(0,0,0,0.05);">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px;">
+              <span style="font-size:16px;">${medalha}</span>
+              <span style="font-size:14px;font-weight:800;color:#1f2937;">🏦 ${escHtml(x.tipo)}</span>
+              <span style="background:${corBar};color:white;border-radius:12px;padding:2px 10px;font-size:12px;font-weight:700;">${x.taxaAtraso}% de atraso</span>
+              ${x.mediaAtr>0?`<span style="color:#888;font-size:11px;">média de +${x.mediaAtr}h além do prazo</span>`:""}
+            </div>
+            <!-- barra de atraso -->
+            <div style="background:#f0f4ff;border-radius:5px;height:18px;overflow:hidden;margin-bottom:8px;position:relative;">
+              <div style="width:${barW}%;background:${corBar};height:100%;border-radius:5px;transition:width .3s;"></div>
+              <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;color:${barW>30?"white":corTxt};">${x.atrasados} de ${x.total} serviços atrasaram</span>
+            </div>
+            <!-- detalhes em chips -->
+            <div style="display:flex;flex-wrap:wrap;gap:6px;font-size:11px;">
+              <span style="background:#d4edda;color:#155724;border-radius:8px;padding:2px 8px;">✅ ${x.dentroSLA} dentro do prazo</span>
+              <span style="background:#f8d7da;color:#721c24;border-radius:8px;padding:2px 8px;">❌ ${x.foraSLA} finalizados com atraso</span>
+              ${x.abertos>0?`<span style="background:#e8f0ff;color:#374151;border-radius:8px;padding:2px 8px;">🔵 ${x.abertos} em aberto ${x.abertosFora>0?`(${x.abertosFora} já fora do prazo)`:""}</span>`:""}
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+      <!-- Tabela resumo -->
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:12px;">
+          <thead><tr style="background:#f0f4ff;text-align:left;">
+            <th style="padding:8px 10px;">#</th>
+            <th style="padding:8px 10px;">Adquirente</th>
+            <th style="padding:8px 10px;text-align:center;">Total</th>
+            <th style="padding:8px 10px;text-align:center;">Dentro SLA</th>
+            <th style="padding:8px 10px;text-align:center;">Fora SLA</th>
+            <th style="padding:8px 10px;text-align:center;">Em aberto</th>
+            <th style="padding:8px 10px;text-align:center;">Taxa atraso</th>
+            <th style="padding:8px 10px;text-align:center;">Média atraso</th>
+          </tr></thead>
+          <tbody>
+            ${rankArr.map((x,i)=>{
+              const corTx=x.taxaAtraso>=70?"#e74a3b":x.taxaAtraso>=40?"#f6c23e":"#1cc88a";
+              return`<tr style="border-bottom:1px solid #eee;">
+                <td style="padding:7px 10px;">${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}</td>
+                <td style="padding:7px 10px;font-weight:700;">🏦 ${escHtml(x.tipo)}</td>
+                <td style="padding:7px 10px;text-align:center;">${x.total}</td>
+                <td style="padding:7px 10px;text-align:center;color:#1cc88a;font-weight:600;">${x.dentroSLA}</td>
+                <td style="padding:7px 10px;text-align:center;color:#e74a3b;font-weight:600;">${x.foraSLA}</td>
+                <td style="padding:7px 10px;text-align:center;color:#4e73df;">${x.abertos}${x.abertosFora>0?` <span style="color:#e74a3b;font-size:10px;">(${x.abertosFora} fora)</span>`:""}</td>
+                <td style="padding:7px 10px;text-align:center;"><span style="background:${corTx};color:white;border-radius:10px;padding:2px 8px;font-weight:700;">${x.taxaAtraso}%</span></td>
+                <td style="padding:7px 10px;text-align:center;color:#888;">${x.mediaAtr>0?"+"+x.mediaAtr+"h":"—"}</td>
+              </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>`
+    }
+  </div>
+
+  <!-- ════ BLOCO 3: LIBERAÇÕES (RECEITA) ════ -->
+  <div style="border-top:2px solid #e3e6f0;padding-top:20px;">
+    <div style="font-size:13px;font-weight:700;color:#1cc88a;margin-bottom:14px;">
+      💰 Adquirentes Liberadas — Clientes Habilitados a Gerar Receita
+    </div>
+    <!-- Contadores semana / mês / ano -->
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px;">
+      <div style="background:linear-gradient(135deg,#1cc88a,#0fa36a);color:white;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:28px;font-weight:900;">${qtdSem}</div>
+        <div style="font-size:11px;opacity:.9;margin-top:2px;">🗓 Última semana</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#4e73df,#2653c7);color:white;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:28px;font-weight:900;">${qtdMes}</div>
+        <div style="font-size:11px;opacity:.9;margin-top:2px;">📅 Últimos 30 dias</div>
+      </div>
+      <div style="background:linear-gradient(135deg,#6f42c1,#4b2b8a);color:white;border-radius:10px;padding:14px;text-align:center;">
+        <div style="font-size:28px;font-weight:900;">${qtdAno}</div>
+        <div style="font-size:11px;opacity:.9;margin-top:2px;">📆 Último ano</div>
+      </div>
+    </div>
+
+    <!-- Barras por mês -->
+    ${mesesAdq.length?`
+    <div style="background:#f8faff;border:1px solid #d0d9f0;border-radius:10px;padding:14px 16px;margin-bottom:14px;">
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:12px;">📅 Liberações por Mês</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        ${[...mesesAdq].reverse().map(key=>{
+          const qtd=porMes[key]||0;
+          const bw=Math.round((qtd/maxBar)*100);
+          const isCur=key===curMesKey;
+          return`<div style="display:flex;align-items:center;gap:10px;">
+            <div style="width:54px;font-size:11px;font-weight:700;color:${isCur?"#fd7e14":"#1cc88a"};text-align:right;flex-shrink:0;">${nomeMes(key)}${isCur?" ★":""}</div>
+            <div style="flex:1;background:#eef2ff;border-radius:5px;height:26px;overflow:hidden;position:relative;">
+              <div style="width:${bw}%;background:${isCur?"linear-gradient(90deg,#fd7e14,#f6c23e)":"linear-gradient(90deg,#1cc88a,#36b9cc)"};height:100%;border-radius:5px;"></div>
+              <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);font-size:11px;font-weight:700;color:${bw>25?"white":"#1cc88a"};">${qtd} adquirente${qtd!==1?"s":""} liberada${qtd!==1?"s":""}</span>
+            </div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>`:`<p style="color:#aaa;font-size:12px;margin-bottom:14px;">Nenhuma adquirente liberada no período.</p>`}
+
+    <!-- Lista das últimas liberações -->
+    ${liberadas.length?`
+    <div style="background:#f0faf4;border:1px solid #1cc88a;border-radius:10px;padding:14px 16px;">
+      <div style="font-size:12px;font-weight:700;color:#0d6b40;margin-bottom:10px;">✅ Últimas liberações (${liberadas.length} no período)</div>
+      <div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;">
+        ${liberadas.slice(0,60).map(x=>`
+        <div style="display:flex;align-items:center;gap:8px;background:white;border-radius:6px;padding:6px 10px;border:1px solid ${x.dentroSLA===false?"#f5c6cb":"#c3e6cb"};cursor:pointer;" onclick="verTicket('${x.ticketId}')">
+          <span style="font-size:10px;color:#888;width:80px;flex-shrink:0;">${x.data.toLocaleDateString("pt-BR")}</span>
+          <span style="background:#1cc88a;color:white;font-size:10px;font-weight:700;padding:1px 8px;border-radius:8px;flex-shrink:0;">${escHtml(x.nome)}</span>
+          <span style="font-size:11px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(x.cliente)}</span>
+          <span style="font-size:10px;color:#888;flex-shrink:0;">#${x.ticketId}</span>
+          ${x.dentroSLA===false?`<span style="font-size:10px;color:#e74a3b;font-weight:600;flex-shrink:0;">+${x.atrasoH}h fora</span>`:x.dentroSLA===true?`<span style="font-size:10px;color:#1cc88a;flex-shrink:0;">✅ no prazo</span>`:""}
+          ${x.responsavel?`<span style="font-size:10px;color:#4e73df;flex-shrink:0;">👤 ${escHtml(x.responsavel)}</span>`:""}
+        </div>`).join("")}
+        ${liberadas.length>60?`<div style="font-size:11px;color:#888;text-align:center;padding:6px;">+${liberadas.length-60} mais</div>`:""}
+      </div>
+    </div>`:""}
+  </div>
+  `;
+}
+
 
 /* ============================================================
    PAINEL PRODUÇÃO MENSAL
@@ -2092,6 +2438,261 @@ function renderListaTickets(lista){
       ${sla?`<div style="margin-top:8px;"><div style="background:#eee;border-radius:4px;height:4px;overflow:hidden;"><div style="width:${sla.porcentagem}%;background:${barColor};height:100%;"></div></div><div style="margin-top:3px;">${slaLabel}</div></div>`:""}
     </div>`;
   }).join("");
+}
+
+/* ============================================================
+   TAREFAS — Lista de trabalho diário do usuário logado
+
+   REGRAS DE FILTRO:
+   • Apenas tickets do SETOR do usuário logado
+   • Apenas tickets onde o próprio usuário tem envolvimento direto
+     (_isTicketMeu) — tickets onde só outra pessoa trabalhou são ignorados
+
+   REGRAS DE PRIORIDADE (3 grupos, desempate por dataAbertura mais antiga):
+   Grupo 0 — Adquirente +48h sem atualizar
+             Ticket tem adquirente (BIN/CIELO/REDE/GETNET/PAGSEGURO/STONE)
+             INICIADA, não finalizada/expirada, e o serviço está há +48h
+             sem receber uma atualização (atualizacaoServico).
+   Grupo 1 — Outros serviços +48h sem atualizar
+             Qualquer serviço não-adquirente nas mesmas condições.
+   Grupo 2 — Em andamento / abertos
+             Todos os demais, ordenados do ticket mais antigo ao mais novo.
+   ============================================================ */
+function mostrarTarefas(){
+  _telaAtual="tarefas";_ticketAbertoId=null;
+  if(!usuarioLogado)return;
+
+  const meuSetor=setorDoUsuario();
+
+  /* ── helpers: checagem APENAS a nível de serviço (48h) ─────── */
+  /* Não usamos ticket.ultimaAtualizacao para evitar falsos positivos
+     quando o ticket foi atualizado mas o serviço específico não foi. */
+  function _srv48adq(ticket, srv){
+    if(!_isServicoAdquirente(srv.nome))return false;
+    if(!srv.iniciado?.marcado||srv.finalizado?.marcado||srv.expirado?.marcado)return false;
+    if(["Concluído","Encerrado","Cancelado"].includes(ticket.status))return false;
+    /* referência de tempo: última atualização do SERVIÇO → data de início */
+    const ref=srv.ultimaAtualizacaoServico
+      ||(srv.atualizacoes?.length?srv.atualizacoes[srv.atualizacoes.length-1].data:null)
+      ||srv.iniciado?.data
+      ||ticket.dataAbertura;
+    if(!ref)return false;
+    return(Date.now()-new Date(ref))/3600000>=48;
+  }
+  function _temAdq48(t){return(t.servicosTicket||[]).some(s=>_srv48adq(t,s));}
+
+  function _srv48outro(ticket, srv){
+    if(_isServicoAdquirente(srv.nome))return false;  // adquirentes já tratadas acima
+    if(!srv.iniciado?.marcado||srv.finalizado?.marcado||srv.expirado?.marcado)return false;
+    if(["Concluído","Encerrado","Cancelado"].includes(ticket.status))return false;
+    const ref=srv.ultimaAtualizacaoServico
+      ||(srv.atualizacoes?.length?srv.atualizacoes[srv.atualizacoes.length-1].data:null)
+      ||srv.iniciado?.data
+      ||ticket.dataAbertura;
+    if(!ref)return false;
+    return(Date.now()-new Date(ref))/3600000>=48;
+  }
+  function _temOutro48(t){return(t.servicosTicket||[]).some(s=>_srv48outro(t,s));}
+
+  /* ── classificação em 3 grupos ──────────────────────────────── */
+  function _grupo(t){
+    if(_temAdq48(t))return 0;   // 🏦 adquirente +48h
+    if(_temOutro48(t))return 1; // ⏰ outro serviço +48h
+    return 2;                   // 🔵 em andamento/aberto
+  }
+
+  /* ── filtro ─────────────────────────────────────────────────── */
+  let lista=tickets.filter(t=>{
+    if(["Concluído","Cancelado","Encerrado"].includes(t.status))return false;
+    if(meuSetor&&t.setor!==meuSetor)return false;
+    return _isTicketMeu(t);
+  });
+
+  /* ── ordenação: grupo asc, depois dataAbertura asc (mais antigo primeiro) */
+  lista=lista.sort((a,b)=>{
+    const ga=_grupo(a),gb=_grupo(b);
+    if(ga!==gb)return ga-gb;
+    return new Date(a.dataAbertura)-new Date(b.dataAbertura);
+  });
+
+  /* ── contadores ─────────────────────────────────────────────── */
+  const cnt=[0,1,2].map(g=>lista.filter(t=>_grupo(t)===g).length);
+
+  /* ── render de um card ──────────────────────────────────────── */
+  function _card(t,pos){
+    const g=_grupo(t);
+    const sla=calcularSLARestante(t);
+    const atrasado=sla&&sla.atrasado;
+    const srvs=t.servicosTicket||[];
+    const srvsFin=srvs.filter(s=>s.finalizado?.marcado).length;
+    const barColor=!sla?"#ccc":atrasado?"#e74a3b":sla.porcentagem>75?"#f6c23e":"#1cc88a";
+
+    const cfgGrupo=[
+      {bg:"#e74a3b",cor:"white",icon:"🏦",label:"ADQUIRENTE +48H SEM ATUALIZAR"},
+      {bg:"#d4a000",cor:"white",icon:"⏰",label:"SERVIÇO +48H SEM ATUALIZAR"},
+      {bg:"#4e73df",cor:"white",icon:"🔵",label:"EM ANDAMENTO / ABERTO"},
+    ][g];
+
+    /* listas de serviços por categoria */
+    const adqAtrasados  =srvs.filter(s=>_srv48adq(t,s));
+    const outrosAtrasados=srvs.filter(s=>_srv48outro(t,s));
+    const adqPendentes  =srvs.filter(s=>_isServicoAdquirente(s.nome)&&s.iniciado?.marcado&&!s.finalizado?.marcado&&!s.expirado?.marcado&&!_srv48adq(t,s));
+    const demaisInic    =srvs.filter(s=>!_isServicoAdquirente(s.nome)&&s.iniciado?.marcado&&!s.finalizado?.marcado&&!s.expirado?.marcado&&!_srv48outro(t,s));
+
+    function _horasServ(srv){
+      const ref=srv.ultimaAtualizacaoServico
+        ||(srv.atualizacoes?.length?srv.atualizacoes[srv.atualizacoes.length-1].data:null)
+        ||srv.iniciado?.data||t.dataAbertura;
+      return ref?Math.round((Date.now()-new Date(ref))/3600000):null;
+    }
+
+    let acaoHtml="";
+
+    /* bloco adquirentes atrasadas */
+    if(adqAtrasados.length){
+      acaoHtml+=`<div style="margin-top:8px;background:#fff0f0;border:1px solid #e74a3b;border-radius:6px;padding:8px 10px;">
+        <div style="font-size:11px;font-weight:700;color:#c0392b;margin-bottom:5px;">🏦 Adquirentes sem atualização (+48h) — atualizar AGORA:</div>
+        ${adqAtrasados.map(s=>{const h=_horasServ(s);return`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;border-bottom:1px solid #fecaca;">
+          <span style="font-weight:600;color:#1f2937;">• ${escHtml(s.nome)}</span>
+          <span style="color:#e74a3b;font-weight:700;">${h!==null?h+"h sem atualizar":"—"}</span>
+        </div>`;}).join("")}
+      </div>`;
+    }
+
+    /* bloco outros serviços atrasados */
+    if(outrosAtrasados.length){
+      acaoHtml+=`<div style="margin-top:6px;background:#fffbe6;border:1px solid #f6c23e;border-radius:6px;padding:8px 10px;">
+        <div style="font-size:11px;font-weight:700;color:#92600a;margin-bottom:5px;">⏰ Outros serviços sem atualização (+48h):</div>
+        ${outrosAtrasados.map(s=>{const h=_horasServ(s);return`<div style="display:flex;justify-content:space-between;font-size:11px;padding:2px 0;">
+          <span style="color:#1f2937;">• ${escHtml(s.nome)}</span>
+          <span style="color:#92600a;font-weight:600;">${h!==null?h+"h":"—"}</span>
+        </div>`;}).join("")}
+      </div>`;
+    }
+
+    /* bloco adquirentes pendentes (ainda não atrasadas) */
+    if(!adqAtrasados.length&&adqPendentes.length){
+      acaoHtml+=`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">
+        ${adqPendentes.map(s=>{const h=_horasServ(s);return`<span style="background:#fff4e5;border:1px solid #fd7e14;border-radius:10px;padding:2px 9px;font-size:11px;color:#c05000;">🏦 ${escHtml(s.nome)}${h!==null?" · "+h+"h":""}</span>`;}).join("")}
+      </div>`;
+    }
+
+    /* demais serviços em andamento */
+    if(demaisInic.length&&!outrosAtrasados.length){
+      acaoHtml+=`<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;">
+        ${demaisInic.map(s=>`<span style="background:#e8f0ff;border:1px solid #d0d9f0;border-radius:10px;padding:2px 9px;font-size:11px;color:#4e73df;">🔵 ${escHtml(s.nome)}</span>`).join("")}
+      </div>`;
+    }
+
+    return`<div style="border:1px solid #e3e6f0;border-radius:10px;overflow:hidden;margin-bottom:10px;box-shadow:0 2px 6px rgba(0,0,0,0.06);cursor:pointer;" onclick="verTicket('${t.id}')">
+      <div style="background:${cfgGrupo.bg};color:${cfgGrupo.cor};padding:7px 14px;display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="background:rgba(0,0,0,0.22);border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;">${pos}</span>
+          <span style="font-size:12px;font-weight:700;">${cfgGrupo.icon} ${cfgGrupo.label}</span>
+        </div>
+        <span style="font-size:11px;opacity:.85;">#${t.id} &bull; ${formatarData(t.dataAbertura)}</span>
+      </div>
+      <div style="padding:12px 14px;background:white;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+          <div style="min-width:0;flex:1;">
+            <strong style="font-size:14px;display:block;margin-bottom:2px;">${escHtml(t.titulo||"")}</strong>
+            <span style="font-size:12px;color:#555;">${escHtml(t.cliente||"")} &bull; ${escHtml(t.setor||"")} &bull; ${escHtml(t.responsavel||"Sem responsável")}</span>
+            ${t.cnpj?`<span style="font-size:11px;color:#888;margin-left:4px;">📄 ${escHtml(t.cnpj)}</span>`:""}
+          </div>
+          <div style="text-align:right;flex-shrink:0;">
+            <span style="background:${corStatus(t.status)};color:white;padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;">${t.status}</span><br>
+            <span style="background:${corPrioridade(t.prioridade)};color:${t.prioridade==="Alta"?"#000":"white"};padding:2px 9px;border-radius:12px;font-size:11px;font-weight:600;margin-top:3px;display:inline-block;">${t.prioridade||""}</span>
+          </div>
+        </div>
+        ${srvs.length?`<div style="margin-top:6px;font-size:11px;color:#888;display:flex;align-items:center;gap:6px;">
+          <span>${srvs.length} serviço(s) &bull; ${srvsFin} finalizado(s)</span>
+          <span style="display:inline-block;width:${Math.round((srvsFin/Math.max(srvs.length,1))*60)}px;height:5px;background:#1cc88a;border-radius:3px;"></span><span style="display:inline-block;width:${Math.round(((srvs.length-srvsFin)/Math.max(srvs.length,1))*60)}px;height:5px;background:#eee;border-radius:3px;"></span>
+        </div>`:""}
+        ${acaoHtml}
+        ${sla?`<div style="margin-top:8px;"><div style="background:#eee;border-radius:4px;height:4px;overflow:hidden;"><div style="width:${sla.porcentagem}%;background:${barColor};height:100%;"></div></div><div style="margin-top:3px;font-size:11px;color:${atrasado?"#e74a3b":"#777"};">${atrasado?`⚠ SLA atrasado ${Math.abs(sla.horas).toFixed(1)}h`:`SLA: ${sla.horas.toFixed(1)}h restantes`}</div></div>`:""}
+      </div>
+    </div>`;
+  }
+
+  /* ── separador de grupo ─────────────────────────────────────── */
+  function _sep(icon,label,cor,qtd){
+    return`<div style="display:flex;align-items:center;gap:10px;margin:18px 0 8px;">
+      <div style="background:${cor};color:white;border-radius:8px;padding:4px 14px;font-size:12px;font-weight:700;">${icon} ${label}</div>
+      <span style="font-size:11px;color:#999;">${qtd} ticket(s)</span>
+      <div style="flex:1;height:1px;background:#e3e6f0;"></div>
+    </div>`;
+  }
+
+  const grupoCfg=[
+    {icon:"🏦",label:"ADQUIRENTES +48H SEM ATUALIZAR",cor:"#e74a3b"},
+    {icon:"⏰",label:"OUTROS SERVIÇOS +48H SEM ATUALIZAR",cor:"#d4a000"},
+    {icon:"🔵",label:"EM ANDAMENTO / ABERTOS",cor:"#4e73df"},
+  ];
+
+  /* ── montar HTML ────────────────────────────────────────────── */
+  let listaHtml="";
+  if(!lista.length){
+    listaHtml=`<div style="text-align:center;padding:60px 20px;color:#999;">
+      <div style="font-size:48px;margin-bottom:12px;">🎉</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:6px;">Nenhuma tarefa pendente!</div>
+      <div style="font-size:13px;">Você não possui tickets abertos atribuídos a você${meuSetor?" no setor "+escHtml(meuSetor):""}.</div>
+    </div>`;
+  } else {
+    let pos=1,grupoAtual=-1;
+    lista.forEach(t=>{
+      const g=_grupo(t);
+      if(g!==grupoAtual){
+        grupoAtual=g;
+        listaHtml+=_sep(grupoCfg[g].icon,grupoCfg[g].label,grupoCfg[g].cor,cnt[g]);
+      }
+      listaHtml+=_card(t,pos++);
+    });
+  }
+
+  document.getElementById("conteudo").innerHTML=`
+    <div style="max-width:840px;">
+
+      <!-- Cabeçalho -->
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;">
+        <h2 style="margin:0;">✅ Tarefas do Dia</h2>
+        <span style="font-size:13px;color:#888;">
+          <b>${escHtml(usuarioLogado.nome)}</b>
+          ${meuSetor?`&bull; Setor: <b>${escHtml(meuSetor)}</b>`:""}
+          &bull; ${lista.length} tarefa(s) em aberto
+        </span>
+      </div>
+
+      <!-- Resumo: 3 cards -->
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:18px;">
+        <div style="background:#e74a3b;color:white;border-radius:12px;padding:16px;text-align:center;box-shadow:0 3px 10px rgba(231,74,59,0.35);">
+          <div style="font-size:36px;font-weight:900;line-height:1;">${cnt[0]}</div>
+          <div style="font-size:11px;opacity:.9;margin-top:5px;line-height:1.4;">🏦 Adquirente<br>+48h sem atualizar</div>
+          <div style="font-size:10px;opacity:.7;margin-top:4px;">BIN · CIELO · REDE · GETNET · PAGSEGURO · STONE</div>
+        </div>
+        <div style="background:#d4a000;color:white;border-radius:12px;padding:16px;text-align:center;box-shadow:0 3px 10px rgba(212,160,0,0.35);">
+          <div style="font-size:36px;font-weight:900;line-height:1;">${cnt[1]}</div>
+          <div style="font-size:11px;opacity:.9;margin-top:5px;line-height:1.4;">⏰ Outros serviços<br>+48h sem atualizar</div>
+          <div style="font-size:10px;opacity:.7;margin-top:4px;">PIX · Boleto · Stark Bank · etc.</div>
+        </div>
+        <div style="background:#4e73df;color:white;border-radius:12px;padding:16px;text-align:center;box-shadow:0 3px 10px rgba(78,115,223,0.3);">
+          <div style="font-size:36px;font-weight:900;line-height:1;">${cnt[2]}</div>
+          <div style="font-size:11px;opacity:.9;margin-top:5px;line-height:1.4;">🔵 Em andamento<br>/ abertos</div>
+          <div style="font-size:10px;opacity:.7;margin-top:4px;">ordenados pelo mais antigo</div>
+        </div>
+      </div>
+
+      <!-- Legenda -->
+      <div style="background:white;border-radius:10px;padding:10px 14px;margin-bottom:14px;box-shadow:0 2px 6px rgba(0,0,0,0.05);font-size:11px;color:#555;display:flex;flex-wrap:wrap;gap:8px;align-items:center;">
+        <b style="color:#374151;font-size:12px;">📋 Ordem:</b>
+        <span style="background:#e74a3b;color:white;padding:2px 10px;border-radius:8px;">🏦 1º Adquirente +48h</span>
+        <span style="background:#d4a000;color:white;padding:2px 10px;border-radius:8px;">⏰ 2º Outros serviços +48h</span>
+        <span style="background:#4e73df;color:white;padding:2px 10px;border-radius:8px;">🔵 3º Em andamento</span>
+        <span style="color:#999;">— dentro de cada grupo: ticket mais antigo primeiro</span>
+      </div>
+
+      <!-- Lista -->
+      <div>${listaHtml}</div>
+    </div>`;
 }
 
 /* ============================================================
