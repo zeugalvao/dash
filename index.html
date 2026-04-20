@@ -185,9 +185,9 @@ const firebaseConfig={apiKey:"AIzaSyDvY4F0fNH0d59t1ZRZqRsbzHaEaxh2RaA",authDomai
 firebase.initializeApp(firebaseConfig);
 const db=firebase.firestore();
 
-let usuarios=[],setores=[],responsaveis=[],servicosCadastro=[],tickets=[];
+let usuarios=[],setores=[],responsaveis=[],servicosCadastro=[],tickets=[],feriados=[];
 let usuarioLogado=null,_dadosCarregados=false,_telaAtual="login",_ticketAbertoId=null;
-let _unsubs={tickets:null,usuarios:null,responsaveis:null,servicos:null,config:null};
+let _unsubs={tickets:null,usuarios:null,responsaveis:null,servicos:null,config:null,feriados:null};
 let _pendIniciado={ticketId:null,srvIdx:null},_pendFinalizado={ticketId:null,srvIdx:null};
 let _pendDesmarcarFin={ticketId:null,srvIdx:null},_pendExpirado={ticketId:null,srvIdx:null};
 let _pendDesmarcarExp={ticketId:null,srvIdx:null},_pendAssinatura={ticketId:null,srvIdx:null};
@@ -388,13 +388,14 @@ async function carregarDadosFirebase(){
     if(!usuarios.length){const r=await db.collection("usuarios").add({nome:"Elizeu",perfil:"adm",setor:"",senha:""});usuarios=[{_id:r.id,nome:"Elizeu",perfil:"adm",setor:"",senha:""}];}
     const rs=await db.collection("responsaveis").get();responsaveis=rs.docs.map(d=>({_id:d.id,...d.data()}));
     const sv=await db.collection("servicos").get();servicosCadastro=sv.docs.map(d=>({_id:d.id,...d.data()}));
+    const fr=await db.collection("feriados").get();feriados=fr.docs.map(d=>({_id:d.id,...d.data()}));
     const tk=await db.collection("tickets").get();tickets=tk.docs.map(d=>({_id:d.id,...d.data()}));
     padronizarIdsTickets();_dadosCarregados=true;
     console.log("✅ Firebase carregado! Usuários:",usuarios.length,"| Tickets:",tickets.length);
   }catch(e){console.error("❌ Firebase:",e);alert("Erro ao conectar com o banco de dados. Verifique o console (F12).");}
 }
 
-function pararRealtime(){try{Object.values(_unsubs).forEach(fn=>{if(typeof fn==="function")fn();});}catch(e){}_unsubs={tickets:null,usuarios:null,responsaveis:null,servicos:null,config:null};}
+function pararRealtime(){try{Object.values(_unsubs).forEach(fn=>{if(typeof fn==="function")fn();});}catch(e){}_unsubs={tickets:null,usuarios:null,responsaveis:null,servicos:null,config:null,feriados:null};}
 function _atualizarTelaAtual(){
   if(!usuarioLogado)return;
   try{
@@ -411,6 +412,7 @@ function iniciarRealtime(){
   _unsubs.usuarios=db.collection("usuarios").onSnapshot(snap=>{usuarios=snap.docs.map(d=>({_id:d.id,...d.data()}));if(usuarioLogado?._id){const n=usuarios.find(u=>u._id===usuarioLogado._id);if(n)usuarioLogado=n;}_atualizarTelaAtual();},e=>console.error(e));
   _unsubs.responsaveis=db.collection("responsaveis").onSnapshot(snap=>{responsaveis=snap.docs.map(d=>({_id:d.id,...d.data()}));_atualizarTelaAtual();},e=>console.error(e));
   _unsubs.servicos=db.collection("servicos").onSnapshot(snap=>{servicosCadastro=snap.docs.map(d=>({_id:d.id,...d.data()}));_atualizarTelaAtual();},e=>console.error(e));
+  _unsubs.feriados=db.collection("feriados").onSnapshot(snap=>{feriados=snap.docs.map(d=>({_id:d.id,...d.data()}));_atualizarTelaAtual();},e=>console.error(e));
   _unsubs.tickets=db.collection("tickets").onSnapshot(snap=>{tickets=snap.docs.map(d=>({_id:d.id,...d.data()}));padronizarIdsTickets();_atualizarTelaAtual();},e=>console.error(e));
 }
 
@@ -533,8 +535,53 @@ function temAdquirenteLiberada(t){if(["Concluído","Encerrado","Cancelado"].incl
 function horasNoCredenciamento(t){const r=t.dataChegadaCredenciamento||t.dataAbertura;if(!r)return 0;return(Date.now()-new Date(r))/3600000;}
 function horasDesdeTransferenciaComercial(t){const r=t.dataTransferenciaComercial;if(!r)return 0;return(Date.now()-new Date(r))/3600000;}
 function precisaRetornoComercial24h(t){if(["Concluído","Encerrado","Cancelado"].includes(t.status))return false;if(!(t.setor||"").toLowerCase().includes("comercial"))return false;if(!t.dataTransferenciaComercial)return false;return horasDesdeTransferenciaComercial(t)>=24;}
-function calcularSLARestante(ticket){const srvs=ticket.servicosTicket||[];const abertura=new Date(ticket.dataAbertura);const now=Date.now();let pH=null,pP=0,pA=false,tem=false;const ativos=srvs.filter(s=>!s.finalizado?.marcado&&!s.expirado?.marcado);if(ativos.length){ativos.forEach(s=>{const sc=servicosCadastro.find(c=>c.nome===s.nome);if(!sc||!sc.sla)return;tem=true;const dec=(now-abertura.getTime())/3600000;const res=sc.sla-dec;const p=Math.min(100,Math.round((dec/sc.sla)*100));if(pH===null||res<pH){pH=res;pP=p;pA=res<0;}});}else if(!srvs.length){const n=ticket.servico||"";if(n){const sc=servicosCadastro.find(s=>s.nome===n);if(sc&&sc.sla){tem=true;const dec=(now-abertura.getTime())/3600000;pH=sc.sla-dec;pP=Math.min(100,Math.round((dec/sc.sla)*100));pA=pH<0;}}}if(!tem)return null;return{horas:pH,atrasado:pA,porcentagem:pP};}
-function calcularSLAServico(ticket,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return null;const sc=servicosCadastro.find(c=>c.nome===srv.nome);if(!sc||!sc.sla)return null;const dec=(Date.now()-new Date(ticket.dataAbertura).getTime())/3600000;const res=sc.sla-dec;return{horas:res,atrasado:res<0,porcentagem:Math.min(100,Math.round((dec/sc.sla)*100)),slaTotal:sc.sla};}
+
+/* ============================================================
+   MÓDULO DE HORAS ÚTEIS (SLA em dias úteis)
+   - Desconsidera sábados, domingos e feriados cadastrados.
+   - Um dia útil equivale a 24h de SLA: portanto um SLA de 48h
+     = 2 dias úteis corridos; 24h = 1 dia útil; 8h = 1/3 de dia útil.
+   - Feriados são armazenados na coleção "feriados" do Firestore
+     com os campos: data (YYYY-MM-DD) e descricao.
+   ============================================================ */
+function _ehFeriado(date){
+  const y=date.getFullYear(),m=String(date.getMonth()+1).padStart(2,"0"),d=String(date.getDate()).padStart(2,"0");
+  const key=`${y}-${m}-${d}`;
+  return (feriados||[]).some(f=>(f.data||"")===key);
+}
+function _ehDiaUtil(date){
+  const dow=date.getDay(); // 0=Dom, 6=Sab
+  if(dow===0||dow===6)return false;
+  if(_ehFeriado(date))return false;
+  return true;
+}
+/* Retorna o número de horas úteis decorridas entre dois timestamps/ISO.
+   Horas úteis = soma dos intervalos em que a data cai num dia útil
+   (seg a sex, excluindo feriados). O dia é contabilizado 24h completas
+   (não há janela horária comercial dentro do dia). */
+function horasUteisEntre(inicio,fim){
+  if(!inicio||!fim)return 0;
+  const ini=new Date(inicio).getTime();
+  const f=new Date(fim).getTime();
+  if(!isFinite(ini)||!isFinite(f)||f<=ini)return 0;
+  let total=0;
+  // Itera do início de cada dia do intervalo
+  const cur=new Date(ini);
+  cur.setHours(0,0,0,0);
+  while(cur.getTime()<f){
+    const proxDia=new Date(cur);proxDia.setDate(proxDia.getDate()+1);
+    const diaIni=Math.max(ini,cur.getTime());
+    const diaFim=Math.min(f,proxDia.getTime());
+    if(diaFim>diaIni && _ehDiaUtil(cur)){
+      total += (diaFim-diaIni)/3600000;
+    }
+    cur.setTime(proxDia.getTime());
+  }
+  return total;
+}
+
+function calcularSLARestante(ticket){const srvs=ticket.servicosTicket||[];const abertura=ticket.dataAbertura;let pH=null,pP=0,pA=false,tem=false;const ativos=srvs.filter(s=>!s.finalizado?.marcado&&!s.expirado?.marcado);if(ativos.length){ativos.forEach(s=>{const sc=servicosCadastro.find(c=>c.nome===s.nome);if(!sc||!sc.sla)return;tem=true;const dec=horasUteisEntre(abertura,Date.now());const res=sc.sla-dec;const p=Math.min(100,Math.round((dec/sc.sla)*100));if(pH===null||res<pH){pH=res;pP=p;pA=res<0;}});}else if(!srvs.length){const n=ticket.servico||"";if(n){const sc=servicosCadastro.find(s=>s.nome===n);if(sc&&sc.sla){tem=true;const dec=horasUteisEntre(abertura,Date.now());pH=sc.sla-dec;pP=Math.min(100,Math.round((dec/sc.sla)*100));pA=pH<0;}}}if(!tem)return null;return{horas:pH,atrasado:pA,porcentagem:pP};}
+function calcularSLAServico(ticket,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return null;const sc=servicosCadastro.find(c=>c.nome===srv.nome);if(!sc||!sc.sla)return null;const dec=horasUteisEntre(ticket.dataAbertura,Date.now());const res=sc.sla-dec;return{horas:res,atrasado:res<0,porcentagem:Math.min(100,Math.round((dec/sc.sla)*100)),slaTotal:sc.sla};}
 function _normalizarAguardandoCliente(t){if(!t)return;if(typeof t.aguardandoClienteAcumuladoMs!=="number")t.aguardandoClienteAcumuladoMs=0;if(t.status==="Aguardando cliente"&&!t.aguardandoClienteInicio)t.aguardandoClienteInicio=t.pendenciaClienteData||t.ultimaAtualizacao||t.dataAbertura||agora();if(t.status!=="Aguardando cliente"&&t.aguardandoClienteInicio)finalizarAguardandoCliente(t,agora());}
 function iniciarAguardandoCliente(t,iso){if(!t)return;if(typeof t.aguardandoClienteAcumuladoMs!=="number")t.aguardandoClienteAcumuladoMs=0;t.aguardandoClienteInicio=iso||agora();}
 function finalizarAguardandoCliente(t,iso){if(!t)return
@@ -548,13 +595,54 @@ function elegivelEncerrarPorFaltaResposta(t){return horasAguardandoClienteAcumul
 function mostrarCadastros(){
   _telaAtual="cadastros";_ticketAbertoId=null;
   if(usuarioLogado.perfil!=="adm"){alert("Acesso restrito.");return;}
-  document.getElementById("conteudo").innerHTML=`<div class="card"><h2 style="margin-top:0;">Cadastros</h2><div class="tabs"><button class="btn-warning" onclick="abaServicos()">Serviços</button><button class="btn-warning" onclick="abaSetores()">Setores</button><button class="btn-warning" onclick="abaResponsaveis()">Responsáveis</button><button class="btn-warning" onclick="abaUsuarios()">Usuários</button></div><div id="abaConteudo"></div></div>`;
+  document.getElementById("conteudo").innerHTML=`<div class="card"><h2 style="margin-top:0;">Cadastros</h2><div class="tabs"><button class="btn-warning" onclick="abaServicos()">Serviços</button><button class="btn-warning" onclick="abaSetores()">Setores</button><button class="btn-warning" onclick="abaResponsaveis()">Responsáveis</button><button class="btn-warning" onclick="abaUsuarios()">Usuários</button><button class="btn-warning" onclick="abaFeriados()">📅 Feriados</button></div><div id="abaConteudo"></div></div>`;
   abaServicos();
 }
-function abaServicos(){document.getElementById("abaConteudo").innerHTML=`<h3>Serviços</h3><div style="display:grid;grid-template-columns:1fr 110px auto;gap:8px;margin-bottom:14px;padding:10px;background:#f4f6fb;border-radius:8px;"><input id="novoServicoNome" placeholder="Nome do Serviço"><input id="novoServicoSLA" type="number" placeholder="SLA (horas)" min="1"><button class="btn-success" onclick="addServico()">+ Adicionar</button></div>${servicosCadastro.length===0?'<p style="color:#999;font-style:italic;">Nenhum serviço cadastrado.</p>':servicosCadastro.map((s,i)=>`<div class="servico-item" id="srv-cad-${i}"><input id="ed-sn-${i}" value="${escHtml(s.nome)}"><input id="ed-ss-${i}" type="number" value="${s.sla}" min="1"><button class="btn-info" onclick="salvarServico(${i})">Salvar</button><button class="btn-danger" onclick="excluirServicoCad(${i})">Excluir</button></div>`).join("")}`;}
+function abaServicos(){document.getElementById("abaConteudo").innerHTML=`<h3>Serviços</h3><div style="background:#e8f0ff;border:1px solid #4e73df;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#1f2937;">ℹ️ <b>SLA em dias úteis:</b> o SLA informado em horas é calculado <b>apenas em dias úteis</b> (segunda a sexta), desconsiderando sábados, domingos e feriados cadastrados. Ex.: 48h de SLA = 2 dias úteis. Cadastre os feriados na aba <b>📅 Feriados</b>.</div><div style="display:grid;grid-template-columns:1fr 110px auto;gap:8px;margin-bottom:14px;padding:10px;background:#f4f6fb;border-radius:8px;"><input id="novoServicoNome" placeholder="Nome do Serviço"><input id="novoServicoSLA" type="number" placeholder="SLA (horas úteis)" min="1"><button class="btn-success" onclick="addServico()">+ Adicionar</button></div>${servicosCadastro.length===0?'<p style="color:#999;font-style:italic;">Nenhum serviço cadastrado.</p>':servicosCadastro.map((s,i)=>`<div class="servico-item" id="srv-cad-${i}"><input id="ed-sn-${i}" value="${escHtml(s.nome)}"><input id="ed-ss-${i}" type="number" value="${s.sla}" min="1"><button class="btn-info" onclick="salvarServico(${i})">Salvar</button><button class="btn-danger" onclick="excluirServicoCad(${i})">Excluir</button></div>`).join("")}`;}
 async function addServico(){const n=document.getElementById("novoServicoNome").value.trim(),s=parseInt(document.getElementById("novoServicoSLA").value);if(!n){alert("Informe o nome.");return;}if(!s||s<=0){alert("SLA inválido.");return;}const novo={nome:n,sla:s};const ref=await db.collection("servicos").add({nome:n,sla:s});novo._id=ref.id;servicosCadastro.push(novo);abaServicos();}
 async function salvarServico(i){const n=document.getElementById("ed-sn-"+i).value.trim(),s=parseInt(document.getElementById("ed-ss-"+i).value);if(!n){alert("Nome vazio.");return;}if(!s||s<=0){alert("SLA inválido.");return;}servicosCadastro[i]={...servicosCadastro[i],nome:n,sla:s};if(servicosCadastro[i]._id)await db.collection("servicos").doc(servicosCadastro[i]._id).set({nome:n,sla:s},{merge:true});const row=document.getElementById("srv-cad-"+i);if(row){row.style.background="#d4edda";setTimeout(()=>row.style.background="",1000);}}
 async function excluirServicoCad(i){if(!confirm("Excluir serviço?"))return;const it=servicosCadastro[i];if(it?._id)await excluirServicoFirebase(it._id);servicosCadastro.splice(i,1);abaServicos();}
+
+/* ========== FERIADOS (impactam cálculo de SLA em dias úteis) ========== */
+function abaFeriados(){
+  const ordenado=[...feriados].sort((a,b)=>(a.data||"").localeCompare(b.data||""));
+  const hoje=new Date();hoje.setHours(0,0,0,0);
+  const proximos=ordenado.filter(f=>{const d=new Date(f.data+"T00:00:00");return !isNaN(d)&&d>=hoje;}).length;
+  document.getElementById("abaConteudo").innerHTML=`<h3>📅 Feriados</h3>
+  <div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#856404;">⚠️ Os feriados cadastrados aqui <b>não contam</b> no cálculo de SLA dos tickets. Sábados e domingos também são automaticamente desconsiderados. Cadastre feriados nacionais, estaduais ou corporativos conforme sua operação.</div>
+  <div style="display:grid;grid-template-columns:160px 1fr auto;gap:8px;margin-bottom:14px;padding:10px;background:#f4f6fb;border-radius:8px;align-items:end;">
+    <div><label style="font-size:11px;color:#666;font-weight:600;">Data</label><input id="novoFeriadoData" type="date"></div>
+    <div><label style="font-size:11px;color:#666;font-weight:600;">Descrição</label><input id="novoFeriadoDesc" placeholder="Ex.: Natal, Carnaval, etc."></div>
+    <button class="btn-success" onclick="addFeriado()">+ Adicionar</button>
+  </div>
+  <div style="font-size:12px;color:#888;margin-bottom:8px;">${feriados.length} feriado(s) cadastrado(s) — ${proximos} futuro(s)</div>
+  ${feriados.length===0?'<p style="color:#999;font-style:italic;">Nenhum feriado cadastrado.</p>':`<table class="srv-table"><thead><tr><th style="width:160px;">Data</th><th>Descrição</th><th style="width:110px;text-align:center;">Dia da semana</th><th style="width:100px;"></th></tr></thead><tbody>${ordenado.map(f=>{const idx=feriados.findIndex(x=>x===f);const d=new Date((f.data||"")+"T00:00:00");const dias=["Domingo","Segunda","Terça","Quarta","Quinta","Sexta","Sábado"];const dow=isNaN(d)?"—":dias[d.getDay()];const passado=!isNaN(d)&&d<hoje;return `<tr${passado?' style="opacity:.55;"':''}><td><input id="ed-fd-${idx}" type="date" value="${escHtml(f.data||"")}"></td><td><input id="ed-fn-${idx}" value="${escHtml(f.descricao||"")}"></td><td style="text-align:center;font-size:12px;color:#666;">${dow}</td><td><button class="btn-info" style="padding:4px 8px;font-size:11px;" onclick="salvarFeriado(${idx})">Salvar</button> <button class="btn-danger" style="padding:4px 8px;font-size:11px;" onclick="excluirFeriado(${idx})">✕</button></td></tr>`;}).join("")}</tbody></table>`}`;
+}
+async function addFeriado(){
+  const d=document.getElementById("novoFeriadoData").value;
+  const desc=document.getElementById("novoFeriadoDesc").value.trim();
+  if(!d){alert("Informe a data.");return;}
+  if(!desc){alert("Informe a descrição.");return;}
+  if(feriados.some(f=>f.data===d)){alert("Esta data já está cadastrada como feriado.");return;}
+  const novo={data:d,descricao:desc};
+  try{const ref=await db.collection("feriados").add(novo);novo._id=ref.id;feriados.push(novo);abaFeriados();}
+  catch(e){console.error(e);alert("Erro ao salvar feriado.");}
+}
+async function salvarFeriado(i){
+  const d=document.getElementById("ed-fd-"+i).value;
+  const desc=document.getElementById("ed-fn-"+i).value.trim();
+  if(!d){alert("Data vazia.");return;}
+  if(!desc){alert("Descrição vazia.");return;}
+  feriados[i]={...feriados[i],data:d,descricao:desc};
+  if(feriados[i]._id){try{await db.collection("feriados").doc(feriados[i]._id).set({data:d,descricao:desc},{merge:true});}catch(e){console.error(e);}}
+  abaFeriados();
+}
+async function excluirFeriado(i){
+  const f=feriados[i];if(!f)return;
+  if(!confirm(`Excluir feriado "${f.descricao||""}" de ${f.data||""}?`))return;
+  if(f._id){try{await db.collection("feriados").doc(f._id).delete();}catch(e){console.error(e);}}
+  feriados.splice(i,1);abaFeriados();
+}
 function abaSetores(){document.getElementById("abaConteudo").innerHTML=`<h3>Setores</h3><div style="display:flex;gap:8px;margin-bottom:10px;"><input id="novoSetor" placeholder="Nome do Setor" style="flex:1;"><button class="btn-success" onclick="addSetor()">+ Adicionar</button></div><ul style="padding:0;list-style:none;">${setores.map((s,i)=>`<li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;"><input value="${escHtml(s)}" onchange="setores[${i}]=this.value;salvarSetores()" style="flex:1;"><button class="btn-danger" onclick="setores.splice(${i},1);salvarSetores();abaSetores();atualizarSeletorVisao()">Excluir</button></li>`).join("")}</ul>`;}
 async function addSetor(){const v=document.getElementById("novoSetor").value.trim();if(!v){alert("Informe o nome.");return;}setores.push(v);await salvarSetores();abaSetores();atualizarSeletorVisao();}
 function abaResponsaveis(){document.getElementById("abaConteudo").innerHTML=`<h3>Responsáveis</h3><div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;flex-wrap:wrap;"><input id="novoRespNome" placeholder="Nome" style="flex:1;min-width:120px;"><select id="novoRespSetor" style="flex:1;min-width:120px;">${setores.map(s=>`<option>${escHtml(s)}</option>`).join("")}</select><button class="btn-success" onclick="addResponsavel()">+ Adicionar</button></div><ul style="padding:0;list-style:none;">${responsaveis.map((r,i)=>`<li style="display:flex;gap:8px;align-items:center;margin-bottom:6px;flex-wrap:wrap;"><input value="${escHtml(r.nome)}" onchange="responsaveis[${i}].nome=this.value;salvarResponsavel(responsaveis[${i}])" style="flex:1;min-width:100px;"><select onchange="responsaveis[${i}].setor=this.value;salvarResponsavel(responsaveis[${i}])" style="flex:1;min-width:100px;">${setores.map(s=>`<option ${s===r.setor?"selected":""}>${escHtml(s)}</option>`).join("")}</select><button class="btn-danger" onclick="excluirResp(${i})">Excluir</button></li>`).join("")}</ul>`;}
@@ -761,7 +849,7 @@ function novoTicket(){
         <div style="grid-column:1/-1;">
           <label><b>Serviços do Ticket</b></label>
           <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;flex-wrap:wrap;">
-            <select id="nt_srv_sel" style="flex:1;margin:0;min-width:150px;"><option value="">-- Selecione um serviço --</option>${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA:${s.sla}h)</option>`).join("")}</select>
+            <select id="nt_srv_sel" style="flex:1;margin:0;min-width:150px;"><option value="">-- Selecione um serviço --</option>${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA:${s.sla}h úteis)</option>`).join("")}</select>
             <button class="btn-info" onclick="adicionarSrvTemp()">+ Adicionar Serviço</button>
           </div>
           <div id="nt_srv_lista"></div>
@@ -850,7 +938,7 @@ function verTicket(id,_rt=false){
         <div style="grid-column:1/-1;">
           <label><b>Serviços do Ticket</b></label>
           <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;flex-wrap:wrap;">
-            <select id="vt_srv_sel" style="flex:1;margin:0;min-width:150px;"><option value="">-- Adicionar serviço --</option>${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA:${s.sla}h)</option>`).join("")}</select>
+            <select id="vt_srv_sel" style="flex:1;margin:0;min-width:150px;"><option value="">-- Adicionar serviço --</option>${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA:${s.sla}h úteis)</option>`).join("")}</select>
             <button class="btn-info" onclick="adicionarSrvTicket('${t.id}')">+ Adicionar Serviço</button>
           </div>
           <div class="srv-table-wrap"><div id="tabelaSrvWrap">${renderTabelaServicosTicket(t)}</div></div>
@@ -908,7 +996,7 @@ function renderTabelaServicosTicket(t){
       else if(precisa48)rowBg="background:#fffde7;";
       else if(slaInfo?.atrasado)rowBg="background:#fff8f8;";
       return`<tr style="${rowBg}" class="${estaExp?"expirado-row":""}">
-        <td><b>${escHtml(s.nome)}</b>${slaH?`<div style="font-size:10px;color:#888;">SLA: ${slaH}h</div>`:""}${s.apiKey?`<div style="font-size:10px;color:#6f42c1;font-weight:600;">🔑 ${escHtml(s.apiKey)}</div>`:""}${estaExp?`<div style="font-size:10px;color:#6c757d;font-weight:600;">⏰ ${escHtml(s.expirado?.motivo||"")}</div>`:""}</td>
+        <td><b>${escHtml(s.nome)}</b>${slaH?`<div style="font-size:10px;color:#888;">SLA: ${slaH}h úteis</div>`:""}${s.apiKey?`<div style="font-size:10px;color:#6f42c1;font-weight:600;">🔑 ${escHtml(s.apiKey)}</div>`:""}${estaExp?`<div style="font-size:10px;color:#6c757d;font-weight:600;">⏰ ${escHtml(s.expirado?.motivo||"")}</div>`:""}</td>
         <td style="text-align:center;">${slaInfo?`<div style="font-size:10px;color:${slaInfo.atrasado?"#e74a3b":"#1cc88a"};font-weight:600;">${slaInfo.atrasado?"⚠ ":""}${Math.abs(slaInfo.horas).toFixed(0)}h${slaInfo.atrasado?" atraso":" rest."}</div><div style="background:#eee;border-radius:3px;height:5px;overflow:hidden;margin-top:2px;"><div style="width:${slaInfo.porcentagem}%;background:${slaInfo.atrasado?"#e74a3b":slaInfo.porcentagem>75?"#f6c23e":"#1cc88a"};height:100%;"></div></div>`:`<span style="font-size:10px;color:#aaa;">—</span>`}</td>
         <td><div class="chk-cell"><div class="chk-row"><input type="checkbox" id="chk_ini_${i}" ${s.iniciado?.marcado?"checked":""} ${estaExp?"disabled":""} onchange="aoClicarIniciado('${t.id}',${i},this.checked)">${s.iniciado?.marcado?`<span class="chk-ok">✔</span>`:""}</div>${s.iniciado?.marcado?`<div class="chk-info"><span class="chk-resp">${escHtml(s.iniciado.responsavel||s.iniciado.usuario||"")}</span><br>${formatarData(s.iniciado.data)}</div>`:""}${s.iniciado?.obs?`<div style="font-size:10px;color:#888;font-style:italic;">${escHtml(s.iniciado.obs)}</div>`:""}</div></td>
         <td><div class="chk-cell"><div class="chk-row"><input type="checkbox" id="chk_ass_${i}" ${s.assinatura?.marcado?"checked":""} ${estaExp?"disabled":""} onchange="aoClicarAssinatura('${t.id}',${i},this.checked)">${s.assinatura?.marcado?`<span class="chk-ok">✔</span>`:""}</div>${s.assinatura?.marcado?`<div class="chk-info"><span class="chk-resp">${escHtml(s.assinatura.responsavel||s.assinatura.usuario||"")}</span><br>${formatarData(s.assinatura.data)}</div>`:""}</div></td>
@@ -1460,7 +1548,7 @@ async function confirmarRestaurar(){
 function _destroyChart(id){if(_charts[id]){_charts[id].destroy();delete _charts[id];}}
 function _difHoras(a,b){if(!a||!b)return null;const d=(new Date(b)-new Date(a))/3600000;return d>=0?d:null;}
 function _horasPendenciaCliente(ticket){if(!ticket.pendenciaClienteData)return 0;const fim=ticket.status==="Aguardando cliente"?new Date().toISOString():(ticket.ultimaAtualizacao||new Date().toISOString());return _difHoras(ticket.pendenciaClienteData,fim)||0;}
-function _horasAtrasoServico(ticket,srv){if(!srv.iniciado?.marcado)return 0;const sc=servicosCadastro.find(s=>s.nome===srv.nome);if(!sc||!sc.sla)return 0;const ref=ticket.dataChegadaCredenciamento||ticket.dataAbertura;const inicio=new Date(ref);const fim=srv.finalizado?.marcado?new Date(srv.finalizado.data):new Date();const dec=(fim-inicio)/3600000;return Math.max(0,dec-sc.sla);}
+function _horasAtrasoServico(ticket,srv){if(!srv.iniciado?.marcado)return 0;const sc=servicosCadastro.find(s=>s.nome===srv.nome);if(!sc||!sc.sla)return 0;const ref=ticket.dataChegadaCredenciamento||ticket.dataAbertura;const fim=srv.finalizado?.marcado?srv.finalizado.data:new Date().toISOString();const dec=horasUteisEntre(ref,fim);return Math.max(0,dec-sc.sla);}
 
 function mostrarDashboard(){
   _telaAtual="dashboard";_ticketAbertoId=null;
@@ -1666,7 +1754,7 @@ function atualizarDashboard(){
         const ref=t.dataChegadaCredenciamento||t.dataAbertura;
         if(ref&&s.iniciado.data){const h=_difHoras(ref,s.iniciado.data);if(h!==null&&h>=0)e.ativacoes.push(h);}
         const sc=servicosCadastro.find(c=>c.nome===s.nome);
-        if(sc&&sc.sla){e.slaTotal++;const aber=new Date(t.dataAbertura);const fim=s.finalizado?.marcado?new Date(s.finalizado.data):new Date();const dec=(fim-aber)/3600000;if(dec<=sc.sla)e.slaOk++;e.atraso+=_horasAtrasoServico(t,s);}
+        if(sc&&sc.sla){e.slaTotal++;const fim=s.finalizado?.marcado?s.finalizado.data:new Date().toISOString();const dec=horasUteisEntre(t.dataAbertura,fim);if(dec<=sc.sla)e.slaOk++;e.atraso+=_horasAtrasoServico(t,s);}
       }
     });
   });
@@ -1775,11 +1863,10 @@ function renderPainelAdquirentes(){
     const sc=servicosCadastro.find(c=>c.nome===nomeServico);
     return sc&&sc.sla?sc.sla:null;
   }
-  /* Horas decorridas desde abertura do ticket até agora (ou até finalização) */
+  /* Horas ÚTEIS decorridas desde abertura do ticket até agora (ou até finalização) */
   function _horasDecorridas(ticket,srv){
-    const inicio=new Date(ticket.dataAbertura).getTime();
-    const fim=srv.finalizado?.marcado&&srv.finalizado.data?new Date(srv.finalizado.data).getTime():now;
-    return(fim-inicio)/3600000;
+    const fim=srv.finalizado?.marcado&&srv.finalizado.data?srv.finalizado.data:new Date(now).toISOString();
+    return horasUteisEntre(ticket.dataAbertura,fim);
   }
 
   /* ── SEÇÃO 1: tickets com adquirente FORA da SLA do CADASTRO ── */
@@ -1873,7 +1960,7 @@ function renderPainelAdquirentes(){
         const d=new Date(s.finalizado.data);
         if(d.getTime()>=msLimite){
           const slaH=_slaHoras(s.nome);
-          const dec=(d-new Date(t.dataAbertura))/3600000;
+          const dec=horasUteisEntre(t.dataAbertura,s.finalizado.data);
           liberadas.push({data:d,nome:s.nome,tipo:_tipoAdq(s.nome)||"",cliente:t.cliente||"",ticketId:t.id,responsavel:s.finalizado.responsavel||"",dentroSLA:slaH?dec<=slaH:null,atrasoH:slaH&&dec>slaH?Math.round(dec-slaH):0});
         }
       }
