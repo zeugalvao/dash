@@ -21,7 +21,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .btn-expired{background:#6c757d;color:white;}
 .card{background:white;padding:16px;border-radius:10px;margin-bottom:15px;box-shadow:0 3px 8px rgba(0,0,0,0.06);border-left:6px solid #1cc88a;}
 .card.evolucao{border-left-color:#4e73df;background:#e8f0ff;}
-.login-container{width:100%;display:flex;justify-content:center;align-items:center;height:100vh;background:#eef2f7;}
+.login-container{width:100%;display:flex;justify-content:center;align-items:center;min-height:100vh;overflow:auto;background:#eef2f7;}
 .login-box{background:white;padding:34px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,0.12);width:340px;max-width:95vw;}
 .login-box h2{margin-top:0;margin-bottom:6px;color:#1f2937;}
 .login-sub{font-size:13px;color:#888;margin-bottom:22px;}
@@ -29,6 +29,28 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 .login-field label{display:block;font-size:13px;font-weight:600;color:#374151;margin-bottom:4px;}
 .login-field input{font-size:14px;padding:10px 12px;}
 .login-error{color:#e74a3b;font-size:12px;margin-top:8px;display:none;}
+.login-stack{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;justify-content:center;padding:24px 12px;width:100%;max-width:760px;}
+.auth-panel{background:white;padding:28px;border-radius:14px;box-shadow:0 6px 24px rgba(0,0,0,0.12);width:340px;max-width:95vw;}
+.auth-panel h2{margin:0 0 4px;color:#1f2937;font-size:20px;}
+.auth-acct{display:flex;align-items:center;gap:14px;background:#f4f6fb;border:1px solid #e3e6f0;border-radius:12px;padding:12px 14px;margin-bottom:12px;}
+.auth-ring{position:relative;width:60px;height:60px;flex-shrink:0;}
+.auth-ring svg{transform:rotate(-90deg);}
+.auth-ring .rbg{stroke:#e3e6f0;} .auth-ring .rfg{stroke:#1cc88a;transition:stroke .3s;}
+.auth-ring .rnum{position:absolute;inset:0;display:grid;place-items:center;font-size:13px;font-weight:700;color:#4e73df;font-variant-numeric:tabular-nums;}
+.auth-acct-main{flex:1;min-width:0;}
+.auth-name{font-size:12px;color:#888;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.auth-code{font-family:ui-monospace,'Roboto Mono',Menlo,Consolas,monospace;font-size:26px;font-weight:700;letter-spacing:2px;color:#1f2937;line-height:1;cursor:pointer;}
+.auth-code.warn{color:#e0a800;}
+.auth-code .g{display:inline-block;width:9px;}
+.auth-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;align-items:center;}
+.auth-actions button{font-size:11px;padding:5px 9px;margin:0;}
+.auth-del{background:none!important;border:none;color:#b0b7c3;font-size:11px;cursor:pointer;padding:2px 4px;margin-left:auto;}
+.auth-del:hover{color:#e74a3b;}
+.auth-hint{font-size:11px;color:#999;margin-top:8px;line-height:1.5;}
+.auth-empty{color:#999;font-size:13px;text-align:center;padding:6px 0 14px;line-height:1.5;}
+.auth-warn{display:none;background:#fff3cd;border:1px solid #f6c23e;color:#856404;border-radius:8px;padding:9px 11px;font-size:11px;line-height:1.5;margin-top:12px;}
+.auth-copied{font-size:11px;color:#1cc88a;font-weight:600;opacity:0;transition:opacity .2s;}
+.auth-copied.show{opacity:1;}
 .tabs{margin-bottom:15px;display:flex;flex-wrap:wrap;gap:6px;}
 .servico-item{display:grid;grid-template-columns:1fr 100px auto auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid #eee;}
 .srv-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px;}
@@ -115,6 +137,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 <div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
 
 <div id="loginScreen" class="login-container">
+ <div class="login-stack">
   <div class="login-box">
     <h2>🔐 CRM — Login</h2>
     <p class="login-sub">Digite seu usuário e senha para acessar</p>
@@ -122,12 +145,33 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
       <input type="text" id="loginUserName" placeholder="Seu nome de usuário" autocomplete="username" onkeydown="if(event.key==='Enter')document.getElementById('loginPassword').focus()">
     </div>
     <div class="login-field"><label>Senha</label>
-      <input type="password" id="loginPassword" placeholder="Sua senha" onkeydown="if(event.key==='Enter')login()">
+      <input type="password" id="loginPassword" placeholder="Sua senha" onkeydown="if(event.key==='Enter')document.getElementById('loginToken').focus()">
+    </div>
+    <div class="login-field"><label>🔑 Código do autenticador</label>
+      <input type="text" id="loginToken" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6 dígitos (se o 2FA estiver ativo)" oninput="var e=document.getElementById('loginError');if(e)e.style.display='none';" onkeydown="if(event.key==='Enter')login()">
     </div>
     <div id="loginError" class="login-error">⚠ Usuário ou senha incorretos.</div>
     <button class="btn-primary" style="margin-top:6px;width:100%;padding:11px;font-size:14px;" onclick="login()">Entrar →</button>
   </div>
+  <div class="auth-panel">
+    <h2>🔑 Meu código</h2>
+    <p class="login-sub">Gerado aqui mesmo — muda a cada 3 minutos</p>
+    <div id="authLista"></div>
+    <div id="authCardAdd">
+      <div class="login-field"><label>Nome / usuário</label>
+        <input type="text" id="authNome" placeholder="Ex.: Elizeu">
+      </div>
+      <div class="login-field"><label>Segredo do 2FA</label>
+        <input type="text" id="authSeg" placeholder="Ex.: JBSWY3DPEHPK3PXP" autocapitalize="characters" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')authAdicionar()">
+      </div>
+      <button class="btn-success" style="width:100%;padding:10px;" onclick="authAdicionar()">➕ Salvar conta</button>
+      <div class="auth-hint">O segredo é gerado no portal em <b>Cadastros → Usuários → Ativar 2FA</b>. Cole uma vez: fica guardado só neste dispositivo e passa a gerar o código sozinho.</div>
+    </div>
+    <div id="authWarn" class="auth-warn">⚠ Este navegador não está guardando os dados neste modo (arquivo aberto direto do disco). Funciona agora, mas não fica salvo ao fechar. Publique no servidor do portal para persistir.</div>
+  </div>
+ </div>
 </div>
+
 
 <div id="crmApp" style="display:none;width:100%;flex-direction:row;">
   <div class="sidebar" id="mainSidebar">
@@ -371,7 +415,7 @@ async function salvarTicket(t){try{
   if(_sl.includes("credenci")&&!t.donoCredenciamento){const d=_calcDonoCredenciamento(t);if(d)t.donoCredenciamento=d;}
   if(t._id){const{_id,...d}=t;await db.collection("tickets").doc(_id).set(d,{merge:true});}else{const ref=await db.collection("tickets").add(Object.fromEntries(Object.entries(t).filter(([k])=>k!=='_id')));t._id=ref.id;}}catch(e){console.error("salvarTicket:",e);}}
 async function excluirTicketFirebase(id){try{await db.collection("tickets").doc(id).delete();}catch(e){console.error(e);}}
-async function salvarUsuario(u){try{const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||""};if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}}catch(e){console.error(e);}}
+async function salvarUsuario(u){try{const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||"",totpSecret:u.totpSecret||""};if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}}catch(e){console.error(e);}}
 async function excluirUsuarioFirebase(id){try{await db.collection("usuarios").doc(id).delete();}catch(e){console.error(e);}}
 async function salvarResponsavel(r){try{if(r._id){const{_id,...d}=r;await db.collection("responsaveis").doc(_id).set(d,{merge:true});}else{const ref=await db.collection("responsaveis").add({nome:r.nome,setor:r.setor});r._id=ref.id;}}catch(e){console.error(e);}}
 async function excluirResponsavelFirebase(id){try{await db.collection("responsaveis").doc(id).delete();}catch(e){console.error(e);}}
@@ -416,7 +460,75 @@ function iniciarRealtime(){
   _unsubs.tickets=db.collection("tickets").onSnapshot(snap=>{tickets=snap.docs.map(d=>({_id:d.id,...d.data()}));padronizarIdsTickets();_atualizarTelaAtual();},e=>console.error(e));
 }
 
-function login(){
+/* ============================================================
+   TOTP (2FA) — token de 6 dígitos que muda a cada 3 minutos (180s)
+   Compatível com o app autenticador (autenticador.html).
+   ============================================================ */
+const TOTP_PERIODO=180, TOTP_DIGITOS=6, TOTP_JANELA=1;
+function _sha1(bytes){const ml=bytes.length*8,w=bytes.concat([0x80]);while(w.length%64!==56)w.push(0);for(let i=7;i>=0;i--)w.push((Math.floor(ml/Math.pow(2,i*8)))&0xff);let h0=0x67452301,h1=0xEFCDAB89,h2=0x98BADCFE,h3=0x10325476,h4=0xC3D2E1F0;const rol=(n,c)=>((n<<c)|(n>>>(32-c)))>>>0;for(let i=0;i<w.length;i+=64){const a2=new Array(80);for(let j=0;j<16;j++)a2[j]=((w[i+j*4]<<24)|(w[i+j*4+1]<<16)|(w[i+j*4+2]<<8)|(w[i+j*4+3]))>>>0;for(let j=16;j<80;j++)a2[j]=rol((a2[j-3]^a2[j-8]^a2[j-14]^a2[j-16])>>>0,1);let a=h0,b=h1,c=h2,d=h3,e=h4;for(let j=0;j<80;j++){let f,k;if(j<20){f=(b&c)|((~b)&d);k=0x5A827999;}else if(j<40){f=b^c^d;k=0x6ED9EBA1;}else if(j<60){f=(b&c)|(b&d)|(c&d);k=0x8F1BBCDC;}else{f=b^c^d;k=0xCA62C1D6;}const t=(rol(a,5)+f+e+k+a2[j])>>>0;e=d;d=c;c=rol(b,30);b=a;a=t;}h0=(h0+a)>>>0;h1=(h1+b)>>>0;h2=(h2+c)>>>0;h3=(h3+d)>>>0;h4=(h4+e)>>>0;}const out=[];[h0,h1,h2,h3,h4].forEach(h=>out.push((h>>>24)&0xff,(h>>>16)&0xff,(h>>>8)&0xff,h&0xff));return out;}
+function _hmacSha1(key,msg){if(key.length>64)key=_sha1(key);const ik=new Array(64).fill(0),ok=new Array(64).fill(0);for(let i=0;i<64;i++){const k=key[i]||0;ik[i]=k^0x36;ok[i]=k^0x5c;}return _sha1(ok.concat(_sha1(ik.concat(msg))));}
+function _b32Decode(s){const alf="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";s=(s||"").toUpperCase().replace(/=+$/,"").replace(/\s/g,"");let bits="";for(const c of s){const v=alf.indexOf(c);if(v<0)continue;bits+=v.toString(2).padStart(5,"0");}const bytes=[];for(let i=0;i+8<=bits.length;i+=8)bytes.push(parseInt(bits.substr(i,8),2));return bytes;}
+function gerarSegredoTOTP(len=16){const alf="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";const r=new Uint8Array(len);(window.crypto||{}).getRandomValues?window.crypto.getRandomValues(r):r.forEach((_,i)=>r[i]=Math.floor(Math.random()*256));let out="";for(let i=0;i<len;i++)out+=alf[r[i]%32];return out;}
+function _hotp(secretBytes,counter){const msg=new Array(8).fill(0);let c=counter;for(let i=7;i>=0;i--){msg[i]=c&0xff;c=Math.floor(c/256);}const sig=_hmacSha1(secretBytes,msg);const off=sig[19]&0xf;const code=((sig[off]&0x7f)<<24)|((sig[off+1]&0xff)<<16)|((sig[off+2]&0xff)<<8)|(sig[off+3]&0xff);return (code%(10**TOTP_DIGITOS)).toString().padStart(TOTP_DIGITOS,"0");}
+function gerarCodigoTOTP(segredo,tempo=Date.now()){return _hotp(_b32Decode(segredo),Math.floor((tempo/1000)/TOTP_PERIODO));}
+async function verificarTOTP(segredo,codigo){codigo=(codigo||"").trim();if(!codigo||!segredo)return false;const bytes=_b32Decode(segredo);const c=Math.floor((Date.now()/1000)/TOTP_PERIODO);for(let w=-TOTP_JANELA;w<=TOTP_JANELA;w++){if(_hotp(bytes,c+w)===codigo)return true;}return false;}
+
+/* ============================================================
+   GERADOR DE CÓDIGO EMBUTIDO NA TELA DE LOGIN
+   (mesma lógica do app autenticador, agora dentro do portal)
+   ============================================================ */
+const AUTH_STORE="crm_totp_contas";
+let _authMem=null,_authSemPersist=false;
+function _authTestStore(){try{localStorage.setItem("__t2","1");localStorage.removeItem("__t2");return true;}catch(e){return false;}}
+function authCarregar(){if(_authMem!==null)return _authMem;if(!_authTestStore()){_authSemPersist=true;_authMem=[];_authAvisar();return _authMem;}try{return JSON.parse(localStorage.getItem(AUTH_STORE)||"[]");}catch(e){return [];}}
+function authSalvar(c){if(_authSemPersist){_authMem=c;return;}try{localStorage.setItem(AUTH_STORE,JSON.stringify(c));}catch(e){_authSemPersist=true;_authMem=c;_authAvisar();}}
+function _authAvisar(){const el=document.getElementById("authWarn");if(el)el.style.display="block";}
+function _authValida(s){const alf="ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";s=(s||"").toUpperCase().replace(/\s/g,"");if(s.length<8)return false;for(const c of s){if(alf.indexOf(c)<0)return false;}return true;}
+function authAdicionar(){try{const nome=(document.getElementById("authNome").value||"").trim();const seg=(document.getElementById("authSeg").value||"").trim().toUpperCase().replace(/\s/g,"");if(!nome){alert("Informe um nome para identificar a conta.");return;}if(!_authValida(seg)){alert("Segredo inválido. Use apenas letras A–Z e números 2–7 (base32), com no mínimo 8 caracteres.");return;}const contas=authCarregar();contas.push({id:Date.now()+"_"+Math.random().toString(36).slice(2,6),nome,seg});authSalvar(contas);if(_authMem!==null)_authMem=contas;document.getElementById("authNome").value="";document.getElementById("authSeg").value="";authRender();}catch(e){alert("Não foi possível salvar a conta: "+(e&&e.message?e.message:e));}}
+function authRemover(id){const contas=authCarregar().filter(c=>c.id!==id);authSalvar(contas);if(_authMem!==null)_authMem=contas;authRender();}
+function authUsar(id){const c=authCarregar().find(x=>x.id===id);if(!c)return;let code;try{code=gerarCodigoTOTP(c.seg);}catch(e){return;}const el=document.getElementById("loginToken");if(el){el.value=code;el.focus();}const er=document.getElementById("loginError");if(er)er.style.display="none";}
+function authCopiar(id){const c=authCarregar().find(x=>x.id===id);if(!c)return;let code;try{code=gerarCodigoTOTP(c.seg);}catch(e){return;}navigator.clipboard&&navigator.clipboard.writeText(code).catch(()=>{});const el=document.getElementById("cp_"+id);if(el){el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1400);}}
+const _AR=25,_AC=2*Math.PI*_AR;
+function authRender(){
+  const lista=document.getElementById("authLista");if(!lista)return;
+  const contas=authCarregar();
+  const cardAdd=document.getElementById("authCardAdd");
+  if(cardAdd)cardAdd.style.display=contas.length?"none":"";
+  if(!contas.length){lista.innerHTML='<div class="auth-empty">Nenhuma conta ainda.<br>Cadastre abaixo com o segredo do portal.</div>';return;}
+  lista.innerHTML=contas.map(c=>`
+    <div class="auth-acct">
+      <div class="auth-ring">
+        <svg width="60" height="60" viewBox="0 0 60 60">
+          <circle class="rbg" cx="30" cy="30" r="${_AR}" fill="none" stroke-width="5"></circle>
+          <circle class="rfg" id="ar_${c.id}" cx="30" cy="30" r="${_AR}" fill="none" stroke-width="5" stroke-linecap="round" stroke-dasharray="${_AC.toFixed(1)}" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="rnum" id="as_${c.id}">–</div>
+      </div>
+      <div class="auth-acct-main">
+        <div class="auth-name">${escHtml(c.nome)}</div>
+        <div class="auth-code" id="ac_${c.id}" onclick="authCopiar('${c.id}')" title="Toque para copiar">••• •••</div>
+        <div class="auth-actions">
+          <button class="btn-primary" onclick="authUsar('${c.id}')">↑ Usar no login</button>
+          <span class="auth-copied" id="cp_${c.id}">✅ Copiado</span>
+          <button class="auth-del" onclick="authRemover('${c.id}')">🗑 Remover</button>
+        </div>
+      </div>
+    </div>`).join("");
+  authTick();
+}
+function authTick(){
+  const lista=document.getElementById("authLista");if(!lista)return;
+  const contas=authCarregar();
+  const s=Math.floor(Date.now()/1000),restante=TOTP_PERIODO-(s%TOTP_PERIODO);
+  for(const c of contas){
+    const codeEl=document.getElementById("ac_"+c.id);if(!codeEl)continue;
+    try{const code=gerarCodigoTOTP(c.seg);codeEl.innerHTML=code.slice(0,3)+'<span class="g"></span>'+code.slice(3);codeEl.classList.toggle("warn",restante<=15);}catch(e){codeEl.textContent="erro";}
+    const secEl=document.getElementById("as_"+c.id);if(secEl)secEl.textContent=restante;
+    const ring=document.getElementById("ar_"+c.id);if(ring){ring.style.strokeDashoffset=(_AC*(1-restante/TOTP_PERIODO)).toFixed(1);ring.style.stroke=restante<=15?"#f6c23e":"#1cc88a";}
+  }
+}
+
+async function login(){
   const nome=(document.getElementById("loginUserName").value||"").trim();
   const senha=document.getElementById("loginPassword").value||"";
   const err=document.getElementById("loginError");
@@ -425,6 +537,13 @@ function login(){
     carregarDadosFirebase().then(()=>{if(_dadosCarregados)login();});return;}
   const u=usuarios.find(x=>(x.nome||"").trim().toLowerCase()===nome.toLowerCase()&&(x.senha||"")===senha);
   if(!u){err.style.display="block";err.textContent="⚠ Usuário ou senha incorretos.";document.getElementById("loginPassword").value="";return;}
+  if(u.totpSecret){
+    const token=(document.getElementById("loginToken").value||"").trim();
+    if(!token){err.style.display="block";err.textContent="⚠ Informe o código do autenticador (6 dígitos).";document.getElementById("loginToken").focus();return;}
+    const ok=await verificarTOTP(u.totpSecret,token);
+    if(!ok){err.style.display="block";err.innerHTML="⚠ Código inválido ou expirado.<br><span style='font-weight:400;'>Confira se o segredo no gerador \"Meu código\" é o mesmo ativado para este usuário no portal.</span>";document.getElementById("loginToken").select();return;}
+  }
+  document.getElementById("loginToken").value="";
   err.style.display="none";usuarioLogado=u;
   document.getElementById("loginScreen").style.display="none";
   document.getElementById("crmApp").style.display="flex";
@@ -435,7 +554,7 @@ function login(){
   document.getElementById("btnBackup").style.display=u.perfil==="adm"?"block":"none";
   atualizarSeletorVisao();_telaAtual="tickets";mostrarTickets();iniciarRealtime();
 }
-function logout(){pararRealtime();_telaAtual="login";_ticketAbertoId=null;usuarioLogado=null;document.getElementById("loginUserName").value="";document.getElementById("loginPassword").value="";document.getElementById("loginError").style.display="none";document.getElementById("crmApp").style.display="none";document.getElementById("loginScreen").style.display="flex";document.getElementById("conteudo").innerHTML="";closeSidebar();}
+function logout(){pararRealtime();_telaAtual="login";_ticketAbertoId=null;usuarioLogado=null;document.getElementById("loginUserName").value="";document.getElementById("loginPassword").value="";var _lt=document.getElementById("loginToken");if(_lt)_lt.value="";document.getElementById("loginError").style.display="none";document.getElementById("crmApp").style.display="none";document.getElementById("loginScreen").style.display="flex";document.getElementById("conteudo").innerHTML="";closeSidebar();}
 
 function atualizarSeletorVisao(){const sel=document.getElementById("filtroVisao");if(!sel)return;if(usuarioLogado.perfil==="adm"){sel.innerHTML='<option value="todos">Todos</option>'+setores.map(s=>`<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("");sel.value="todos";sel.disabled=false;}else{const st=setorDoUsuario();sel.innerHTML=`<option value="${escHtml(st)}">${escHtml(st||"Sem setor")}</option>`;sel.value=st;sel.disabled=true;const si=document.getElementById("setorInfo");if(si)si.innerHTML=st?"Setor: <b>"+escHtml(st)+"</b>":"<span style='color:#f6c23e;font-size:11px;'>⚠ Nenhum setor atribuído</span>";}}
 function setorDoUsuario(){if(usuarioLogado.setor&&usuarioLogado.setor.trim())return usuarioLogado.setor.trim();const r=responsaveis.find(r=>(r.nome||"").toLowerCase()===(usuarioLogado.nome||"").toLowerCase());return r?r.setor:"";}
@@ -672,6 +791,14 @@ function abaUsuarios(){
         <div><label style="font-size:11px;color:#666;">Nova senha</label><input id="eu-senha-${i}" type="password" placeholder="deixe em branco para manter"></div>
         <div><label style="font-size:11px;color:#666;">📧 E-mail</label><input id="eu-email-${i}" type="email" value="${escHtml(u.email||"")}" placeholder="email@empresa.com"></div>
       </div>
+      <div style="margin-top:10px;padding:10px;background:#f4f6fb;border:1px solid #e3e6f0;border-radius:6px;">
+        <div style="font-size:12px;"><b>🔐 Autenticação em 2 etapas (2FA):</b> <span id="eu-2fa-status-${i}" style="font-weight:600;color:${u.totpSecret?"#1cc88a":"#6c757d"};">${u.totpSecret?"✅ Ativado":"❌ Desativado"}</span></div>
+        <div id="eu-2fa-secret-${i}" style="margin-top:6px;"></div>
+        <div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap;">
+          <button class="btn-warning" onclick="gerar2FA(${i})">${u.totpSecret?"🔄 Gerar novo segredo":"➕ Ativar 2FA"}</button>
+          ${u.totpSecret?`<button class="btn-dark" onclick="verSegredo2FA(${i})">👁 Ver segredo atual</button><button class="btn-danger" onclick="remover2FA(${i})">Desativar 2FA</button>`:""}
+        </div>
+      </div>
       <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;">
         <button class="btn-info" onclick="salvarEdicaoUsuario(${i})">💾 Salvar</button>
         <button class="btn-danger" onclick="excluirUsuario(${i})">🗑 Excluir</button>
@@ -681,6 +808,19 @@ function abaUsuarios(){
 async function addUsuario(){const n=document.getElementById("novoUserNome").value.trim(),p=document.getElementById("novoUserPerfil").value,s=document.getElementById("novoUserSetor").value,se=document.getElementById("novoUserSenha").value,em=(document.getElementById("novoUserEmail")?.value||"").trim();if(!n){alert("Informe o nome.");return;}const novo={nome:n,perfil:p,setor:s,senha:se,email:em};usuarios.push(novo);await salvarUsuario(novo);abaUsuarios();}
 async function salvarEdicaoUsuario(i){const n=document.getElementById("eu-nome-"+i).value.trim(),p=document.getElementById("eu-perfil-"+i).value,s=document.getElementById("eu-setor-"+i).value,ns=document.getElementById("eu-senha-"+i).value,em=(document.getElementById("eu-email-"+i)?.value||"").trim();if(!n){alert("Nome vazio.");return;}usuarios[i].nome=n;usuarios[i].perfil=p;usuarios[i].setor=s;usuarios[i].email=em;if(ns!=="")usuarios[i].senha=ns;await salvarUsuario(usuarios[i]);alert("Usuário salvo!");}
 async function excluirUsuario(i){if(!confirm(`Excluir "${usuarios[i].nome}"?`))return;const u=usuarios[i];if(u._id)await excluirUsuarioFirebase(u._id);usuarios.splice(i,1);abaUsuarios();}
+function _render2FASecret(i,seg,novo){const box=document.getElementById("eu-2fa-secret-"+i);if(!box)return;const nomeU=(usuarios[i].nome||"").replace(/'/g,"\\'");box.innerHTML=`<div style="background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:10px;">
+  <div style="font-size:11px;color:#856404;line-height:1.4;">${novo?"✅ <b>Novo segredo gerado.</b> ":""}Este é o segredo do 2FA de <b>${escHtml(usuarios[i].nome)}</b>. Use o botão verde para já deixá-lo pronto no gerador desta tela de login:</div>
+  <div style="font-family:monospace;font-size:17px;font-weight:700;letter-spacing:3px;margin:8px 0;word-break:break-all;color:#1f2937;">${escHtml(seg)}</div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <button class="btn-success" onclick="registrarNoGerador('${nomeU}','${seg}',this)">✅ Adicionar ao gerador desta página</button>
+    <button class="btn-info" onclick="navigator.clipboard.writeText('${seg}').then(()=>{this.textContent='✅ Copiado!';})">📋 Copiar segredo</button>
+  </div>
+  <div style="font-size:10px;color:#a07d1a;margin-top:6px;">⚠ Guarde com segurança. Este código é o que gera os tokens de acesso.</div>
+</div>`;}
+function registrarNoGerador(nome,seg,btn){try{const contas=authCarregar();if(contas.some(c=>c.seg===seg)){if(btn){btn.textContent="✅ Já está no gerador";}return;}contas.push({id:Date.now()+"_"+Math.random().toString(36).slice(2,6),nome,seg});authSalvar(contas);if(_authMem!==null)_authMem=contas;authRender();if(btn){btn.textContent="✅ Adicionado! Aparece no login";btn.disabled=true;}}catch(e){alert("Não foi possível adicionar ao gerador: "+(e&&e.message?e.message:e));}}
+async function gerar2FA(i){if(usuarios[i].totpSecret&&!confirm("Já existe um 2FA ativo. Gerar um novo segredo invalidará o atual. Continuar?"))return;const seg=gerarSegredoTOTP(16);usuarios[i].totpSecret=seg;await salvarUsuario(usuarios[i]);const st=document.getElementById("eu-2fa-status-"+i);if(st){st.textContent="✅ Ativado";st.style.color="#1cc88a";}_render2FASecret(i,seg,true);}
+function verSegredo2FA(i){if(!usuarios[i].totpSecret){alert("Este usuário não tem 2FA ativo.");return;}_render2FASecret(i,usuarios[i].totpSecret,false);}
+async function remover2FA(i){if(!confirm("Desativar o 2FA deste usuário? Ele voltará a entrar apenas com usuário e senha."))return;usuarios[i].totpSecret="";await salvarUsuario(usuarios[i]);abaUsuarios();}
 
 /* ============================================================
    TICKETS — LISTA E FILTROS
@@ -849,7 +989,7 @@ function novoTicket(){
         <div style="grid-column:1/-1;">
           <label><b>Serviços do Ticket</b></label>
           <div style="display:flex;gap:8px;margin:6px 0 8px;align-items:center;flex-wrap:wrap;">
-            <select id="nt_srv_sel" style="flex:1;margin:0;min-width:150px;"><option value="">-- Selecione um serviço --</option>${servicosCadastro.map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA:${s.sla}h úteis)</option>`).join("")}</select>
+            <select id="nt_srv_sel" style="flex:1;margin:0;min-width:150px;"><option value="">-- Selecione um serviço --</option>${servicosCadastro.slice().sort((a,b)=>(a.nome||"").localeCompare(b.nome||"","pt-BR",{sensitivity:"base"})).map(s=>`<option value="${escHtml(s.nome)}">${escHtml(s.nome)} (SLA:${s.sla}h úteis)</option>`).join("")}</select>
             <button class="btn-info" onclick="adicionarSrvTemp()">+ Adicionar Serviço</button>
           </div>
           <div id="nt_srv_lista"></div>
@@ -2785,6 +2925,9 @@ function mostrarTarefas(){
 /* ============================================================
    INIT
    ============================================================ */
+/* Gerador de código embutido: já funciona ao abrir a página, sem depender do Firebase */
+try{authRender();setInterval(authTick,1000);}catch(e){console.error(e);}
+
 carregarDadosFirebase().then(()=>{
   setTimeout(()=>{const el=document.getElementById("loginUserName");if(el)el.focus();},200);
 }).catch(err=>{
