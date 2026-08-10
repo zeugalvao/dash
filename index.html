@@ -1627,6 +1627,7 @@ function abrirModalBackup(){
   const prev=document.getElementById("previewRestaurar");const btnConf=document.getElementById("btnConfirmarRestaurar");const restInfo=document.getElementById("restaurarInfo");
   if(prev){prev.style.display="none";prev.innerHTML="";}if(btnConf)btnConf.style.display="none";if(restInfo)restInfo.style.display="none";
   _dadosRestaurar=null;const inp=document.getElementById("inputRestaurar");if(inp)inp.value="";
+  try{_bkpInjetarPainel();_bkpListar();}catch(e){console.error(e);}
   document.getElementById("modalBackup").style.display="flex";
 }
 function fazerBackup(){
@@ -1680,6 +1681,266 @@ async function confirmarRestaurar(){
     fecharModal("modalBackup");alert("✅ Backup restaurado com sucesso!");atualizarSeletorVisao();mostrarTickets();
   }catch(err){console.error("Erro ao restaurar:",err);alert("❌ Erro ao restaurar: "+err.message);}
   finally{if(btnConf){btnConf.disabled=false;btnConf.textContent="⚠️ Confirmar Restauração";}_dadosRestaurar=null;}
+}
+
+/* ============================================================
+   BACKUP AUTOMÁTICO DIÁRIO NO FIREBASE (00:00 - horário de Brasília)
+   Salva uma cópia completa dos dados na coleção "backups" do próprio
+   Firestore. Não depende de nenhuma ação manual.
+   ============================================================ */
+const BKP_COL      = "backups";           // coleção onde os backups ficam
+const BKP_MANTER   = 30;                  // quantos backups manter (dias)
+const BKP_CHUNK    = 400000;              // caracteres por parte (limite Firestore = 1MB/doc)
+const BKP_TZ       = "America/Sao_Paulo";
+let   _bkpRodando  = false;
+
+/* data de referência do backup (YYYY-MM-DD) sempre no fuso de Brasília */
+function _bkpDataRef(){
+  return new Intl.DateTimeFormat("en-CA",{timeZone:BKP_TZ,year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date());
+}
+function _bkpHoraRef(){
+  return new Intl.DateTimeFormat("pt-BR",{timeZone:BKP_TZ,hour:"2-digit",minute:"2-digit"}).format(new Date()).replace(":","h");
+}
+
+/* lê TODAS as coleções direto do Firestore (não usa a memória do navegador) */
+async function _bkpColetar(){
+  const [cfg,us,rs,sv,fr,tk] = await Promise.all([
+    db.collection("configuracoes").doc("geral").get(),
+    db.collection("usuarios").get(),
+    db.collection("responsaveis").get(),
+    db.collection("servicos").get(),
+    db.collection("feriados").get(),
+    db.collection("tickets").get()
+  ]);
+  const map = s => s.docs.map(d=>({_id:d.id,...d.data()}));
+  return {
+    setores:         (cfg.exists ? (cfg.data().setores||[]) : []),
+    usuarios:        map(us),
+    responsaveis:    map(rs),
+    servicosCadastro:map(sv),
+    feriados:        map(fr),
+    tickets:         map(tk)
+  };
+}
+
+/* grava o backup no Firestore, fatiado em partes para respeitar o limite de 1MB por documento */
+async function _bkpGravar(id,origem){
+  const docRef = db.collection(BKP_COL).doc(id);
+  const d      = await _bkpColetar();
+  const meta   = {
+    versao:"2.0",
+    data:id,
+    geradoEm:new Date().toISOString(),
+    origem:origem||"automatico",
+    contagens:{
+      tickets:d.tickets.length, usuarios:d.usuarios.length,
+      responsaveis:d.responsaveis.length, servicos:d.servicosCadastro.length,
+      feriados:d.feriados.length, setores:d.setores.length
+    }
+  };
+  const json = JSON.stringify({_meta:meta,...d});
+
+  /* limpa partes de uma tentativa anterior que possa ter falhado no meio */
+  const antigas = await docRef.collection("partes").get();
+  if(antigas.size){
+    const b=db.batch(); antigas.docs.forEach(x=>b.delete(x.ref)); await b.commit();
+  }
+
+  const partes=[];
+  for(let i=0;i<json.length;i+=BKP_CHUNK) partes.push(json.slice(i,i+BKP_CHUNK));
+  for(let i=0;i<partes.length;i++){
+    await docRef.collection("partes").doc("p"+String(i).padStart(4,"0")).set({i,txt:partes[i]});
+  }
+
+  await docRef.set({...meta,status:"ok",partes:partes.length,tamanhoBytes:json.length},{merge:true});
+  console.log(`💾 Backup "${id}" gravado no Firebase (${partes.length} parte(s), ${(json.length/1024).toFixed(0)} KB)`);
+  return {id,...meta,partes:partes.length,tamanhoBytes:json.length};
+}
+
+/* cria o backup do dia; usa "reserva" transacional para que, com vários
+   navegadores abertos, apenas um deles execute o backup */
+async function criarBackupFirebase(origem,forcarId){
+  if(_bkpRodando) return null;
+  const id     = forcarId || _bkpDataRef();
+  const docRef = db.collection(BKP_COL).doc(id);
+  _bkpRodando  = true;
+  try{
+    const reservado = await db.runTransaction(async tx=>{
+      const s = await tx.get(docRef);
+      if(s.exists){
+        const dt = s.data();
+        if(dt.status==="ok") return false;                                   // já existe
+        if(dt.status==="andamento" && (Date.now()-(dt.iniciadoMs||0))<180000) return false; // outro navegador está fazendo
+      }
+      tx.set(docRef,{status:"andamento",iniciadoMs:Date.now(),origem:origem||"automatico"},{merge:true});
+      return true;
+    });
+    if(!reservado) return null;
+    const r = await _bkpGravar(id,origem);
+    _bkpLimparAntigos().catch(()=>{});
+    return r;
+  }catch(e){
+    console.error("❌ Erro no backup automático:",e);
+    return null;
+  }finally{
+    _bkpRodando=false;
+  }
+}
+
+/* apaga backups além do limite de retenção */
+async function _bkpLimparAntigos(){
+  const snap = await db.collection(BKP_COL).get();
+  const ids  = snap.docs.map(d=>d.id).sort();            // YYYY-MM-DD ordena cronologicamente
+  const excluir = ids.slice(0,Math.max(0,ids.length-BKP_MANTER));
+  for(const id of excluir){
+    const ref = db.collection(BKP_COL).doc(id);
+    const ps  = await ref.collection("partes").get();
+    if(ps.size){const b=db.batch();ps.docs.forEach(x=>b.delete(x.ref));await b.commit();}
+    await ref.delete();
+    console.log("🗑️ Backup antigo removido:",id);
+  }
+}
+
+/* ---------- verificação automática ---------- */
+/* Roda ao abrir o sistema e a cada 5 minutos. Se o backup do dia ainda não
+   existe (ex.: virou 00:00, ou ninguém abriu o site à meia-noite), ele é
+   criado na hora — garantindo 1 backup por dia sem nenhuma ação manual.    */
+function _bkpVerificar(){
+  if(!_dadosCarregados || _bkpRodando) return;
+  const id = _bkpDataRef();
+  try{ if(localStorage.getItem("bkp_ok_em")===id) return; }catch(e){}
+  db.collection(BKP_COL).doc(id).get().then(s=>{
+    if(s.exists && s.data().status==="ok"){
+      try{ localStorage.setItem("bkp_ok_em",id); }catch(e){}
+      return null;
+    }
+    return criarBackupFirebase("automatico").then(r=>{
+      if(r){ try{ localStorage.setItem("bkp_ok_em",id); }catch(e){} }
+    });
+  }).catch(e=>console.warn("Verificação de backup:",e.message));
+}
+
+function iniciarBackupAutomatico(){
+  setTimeout(_bkpVerificar,8000);          // pouco depois de carregar
+  setInterval(_bkpVerificar,5*60*1000);    // e a cada 5 minutos (pega a virada da meia-noite)
+}
+
+/* ---------- restauração a partir do Firebase ---------- */
+async function _bkpAplicar(d){
+  async function col(nome,arr){
+    const snap=await db.collection(nome).get(); const L=450;
+    for(let i=0;i<snap.docs.length;i+=L){const b=db.batch();snap.docs.slice(i,i+L).forEach(x=>b.delete(x.ref));await b.commit();}
+    const items=arr||[];
+    for(let i=0;i<items.length;i+=L){
+      const b=db.batch();
+      items.slice(i,i+L).forEach(item=>{const{_id,...dados}=item;const ref=_id?db.collection(nome).doc(_id):db.collection(nome).doc();b.set(ref,dados);});
+      await b.commit();
+    }
+  }
+  await db.collection("configuracoes").doc("geral").set({setores:d.setores||[]},{merge:true});
+  await col("usuarios",d.usuarios||[]);
+  await col("responsaveis",d.responsaveis||[]);
+  await col("servicos",d.servicosCadastro||[]);
+  await col("feriados",d.feriados||[]);
+  await col("tickets",d.tickets||[]);
+  setores=d.setores||[]; usuarios=d.usuarios||[]; responsaveis=d.responsaveis||[];
+  servicosCadastro=d.servicosCadastro||[]; feriados=d.feriados||[]; tickets=d.tickets||[];
+}
+
+async function _bkpLerJson(id){
+  const docRef=db.collection(BKP_COL).doc(id);
+  const s=await docRef.get();
+  if(!s.exists || s.data().status!=="ok") throw new Error("Backup não encontrado ou incompleto.");
+  const ps=await docRef.collection("partes").orderBy("i").get();
+  if(!ps.size) throw new Error("Backup sem dados.");
+  return ps.docs.map(d=>d.data().txt).join("");
+}
+
+async function restaurarBackupFirebase(id){
+  if(usuarioLogado?.perfil!=="adm"){alert("Acesso restrito.");return;}
+  if(!confirm(`⚠️ ATENÇÃO!\n\nTodos os dados atuais serão SUBSTITUÍDOS pelo backup de ${id}.\n\nUm backup de segurança do estado atual será criado antes.\n\nDeseja continuar?`))return;
+  const el=document.getElementById("bkpAutoStatus");
+  const setSt=(t,c)=>{if(el){el.innerHTML=t;el.style.color=c||"#555";}};
+  try{
+    setSt("⏳ Criando backup de segurança do estado atual...");
+    await _bkpGravar(`${_bkpDataRef()}-antes-restauracao-${_bkpHoraRef()}`,"pre-restauracao");
+    setSt("⏳ Lendo backup selecionado...");
+    const dados=JSON.parse(await _bkpLerJson(id));
+    setSt("⏳ Restaurando dados... NÃO feche a página.");
+    await _bkpAplicar(dados);
+    setSt("✅ Restauração concluída!","#155724");
+    alert("✅ Backup de "+id+" restaurado com sucesso!");
+    try{fecharModal("modalBackup");atualizarSeletorVisao();mostrarTickets();}catch(e){}
+  }catch(e){
+    console.error(e);
+    setSt("❌ Erro: "+escHtml(e.message),"#e74a3b");
+    alert("❌ Erro ao restaurar: "+e.message);
+  }
+}
+
+async function baixarBackupFirebase(id){
+  try{
+    const json=await _bkpLerJson(id);
+    const url=URL.createObjectURL(new Blob([json],{type:"application/json"}));
+    const a=document.createElement("a");a.href=url;a.download=`CRM_Backup_${id}.json`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  }catch(e){alert("❌ Erro ao baixar: "+e.message);}
+}
+
+/* ---------- painel dentro do modal de Backup ---------- */
+function _bkpInjetarPainel(){
+  const box=document.querySelector("#modalBackup .modal-box");
+  if(!box || document.getElementById("bkpAutoBox")) return;
+  const div=document.createElement("div");
+  div.id="bkpAutoBox";
+  div.style.cssText="background:#eef4ff;border:1px solid #4e73df;border-radius:8px;padding:16px;margin-bottom:16px;";
+  div.innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <span style="font-size:22px;">🤖</span>
+      <div><b style="font-size:14px;">Backup Automático no Firebase</b>
+      <div style="font-size:12px;color:#555;margin-top:2px;">Todos os dias à <b>00:00</b> uma cópia completa é salva no próprio banco de dados. Mantém os últimos <b>${BKP_MANTER}</b> dias.</div></div>
+    </div>
+    <div id="bkpAutoStatus" style="font-size:12px;color:#555;margin:8px 0;"></div>
+    <button class="btn-dark" onclick="_bkpAgoraManual()" style="width:100%;padding:8px;font-size:12px;margin-bottom:10px;">💾 Gerar backup agora no Firebase</button>
+    <div style="font-size:12px;font-weight:600;color:#374151;margin-bottom:6px;">Backups disponíveis:</div>
+    <div id="bkpAutoLista" style="max-height:200px;overflow-y:auto;font-size:12px;"></div>`;
+  box.insertBefore(div, box.children[1] || null);
+}
+
+async function _bkpAgoraManual(){
+  const el=document.getElementById("bkpAutoStatus");
+  if(el){el.innerHTML="⏳ Gerando backup no Firebase...";el.style.color="#555";}
+  const r=await criarBackupFirebase("manual",`${_bkpDataRef()}-manual-${_bkpHoraRef()}`);
+  if(el){
+    if(r){el.innerHTML=`✅ Backup <b>${r.id}</b> gravado (${(r.tamanhoBytes/1024).toFixed(0)} KB).`;el.style.color="#155724";}
+    else {el.innerHTML="⚠️ Não foi possível gerar agora. Veja o console (F12).";el.style.color="#b8860b";}
+  }
+  _bkpListar();
+}
+
+async function _bkpListar(){
+  const el=document.getElementById("bkpAutoLista"); if(!el)return;
+  el.innerHTML="⏳ Carregando...";
+  try{
+    const snap=await db.collection(BKP_COL).get();
+    const itens=snap.docs.map(d=>({id:d.id,...d.data()})).filter(x=>x.status==="ok").sort((a,b)=>b.id.localeCompare(a.id));
+    if(!itens.length){el.innerHTML='<i style="color:#888;">Nenhum backup ainda — o primeiro é criado automaticamente em alguns segundos.</i>';return;}
+    el.innerHTML=itens.map(b=>{
+      const c=b.contagens||{};
+      const qd=b.geradoEm?new Date(b.geradoEm).toLocaleString("pt-BR"):b.id;
+      const tag=b.origem==="automatico"?'<span style="background:#1cc88a;color:#fff;padding:1px 6px;border-radius:6px;font-size:10px;">AUTO</span>'
+              :b.origem==="pre-restauracao"?'<span style="background:#f6c23e;color:#fff;padding:1px 6px;border-radius:6px;font-size:10px;">SEGURANÇA</span>'
+              :'<span style="background:#4e73df;color:#fff;padding:1px 6px;border-radius:6px;font-size:10px;">MANUAL</span>';
+      return `<div style="background:#fff;border:1px solid #dbe3f5;border-radius:6px;padding:8px 10px;margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div><b>${escHtml(b.id)}</b> ${tag}<div style="color:#888;font-size:11px;">${qd} · 🎫 ${c.tickets||0} tickets · 👥 ${c.usuarios||0} usuários · ${((b.tamanhoBytes||0)/1024).toFixed(0)} KB</div></div>
+          <div style="display:flex;gap:6px;">
+            <button onclick="baixarBackupFirebase('${escHtml(b.id)}')" style="padding:4px 9px;font-size:11px;cursor:pointer;border:1px solid #4e73df;background:#fff;color:#4e73df;border-radius:5px;">⬇️ Baixar</button>
+            <button onclick="restaurarBackupFirebase('${escHtml(b.id)}')" style="padding:4px 9px;font-size:11px;cursor:pointer;border:1px solid #e74a3b;background:#e74a3b;color:#fff;border-radius:5px;">♻️ Restaurar</button>
+          </div>
+        </div></div>`;
+    }).join("");
+  }catch(e){el.innerHTML="❌ Erro ao listar: "+escHtml(e.message);}
 }
 
 /* ============================================================
@@ -2930,6 +3191,7 @@ try{authRender();setInterval(authTick,1000);}catch(e){console.error(e);}
 
 carregarDadosFirebase().then(()=>{
   setTimeout(()=>{const el=document.getElementById("loginUserName");if(el)el.focus();},200);
+  try{iniciarBackupAutomatico();}catch(e){console.error("Backup automatico:",e);}
 }).catch(err=>{
   console.error("Falha ao inicializar:",err);
   document.body.innerHTML='<div style="text-align:center;padding:60px;font-family:sans-serif;"><h2>❌ Erro ao conectar com o banco de dados</h2><p>Verifique sua conexão com a internet e as configurações do Firebase.</p><p style="color:#999;">Detalhes no console (F12)</p></div>';
