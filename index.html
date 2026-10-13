@@ -3302,8 +3302,7 @@ function _checklistPendente(t){return!!(t&&t.checklistObrigatorio&&!t.slaInicio)
 /* Visão: mantém regra de setor e filtra pelo módulo atual */
 function ticketsVisiveis(){
   let base;
-  if(usuarioLogado.perfil==="adm"){const v=document.getElementById("filtroVisao")?.value||"todos";base=v==="todos"?[...tickets]:tickets.filter(t=>t.setor===v);}
-  else{const st=setorDoUsuario();base=st?tickets.filter(t=>t.setor===st):[...tickets];}
+  const st=setorDoUsuario();base=st?tickets.filter(t=>t.setor===st):[...tickets];
   return base.filter(_ticketNoModulo);
 }
 
@@ -3424,12 +3423,13 @@ window.login=async function(){
   _entrarNoCrm();
 };
 function _entrarNoCrm(){
+  if(!_setorEscolhido){_abrirEscolhaSetor(false);return;}
   const perm=_modulosPermitidos();
   _moduloAtual=perm[0]||"interno";
   _aplicarNav();_irInicio();
 }
 const _logoutOrig=window.logout;
-window.logout=function(){_logoutOrig.apply(this,arguments);const sw=document.getElementById("moduloSwitch");if(sw)sw.innerHTML="";const bn=document.getElementById("moduloBanner");if(bn)bn.innerHTML="";};
+window.logout=function(){_setorEscolhido=false;_setorAtual="";const es=document.getElementById("escolhaSetorTela");if(es)es.style.display="none";_logoutOrig.apply(this,arguments);const sw=document.getElementById("moduloSwitch");if(sw)sw.innerHTML="";const bn=document.getElementById("moduloBanner");if(bn)bn.innerHTML="";};
 
 const _atualizarTelaOrig=window._atualizarTelaAtual;
 window._atualizarTelaAtual=function(){
@@ -3460,6 +3460,8 @@ _guardTela("mostrarTarefas","tarefas","ver tarefas");
 _guardTela("novoTicket","incluir","incluir ticket");
 
 function _ajustarNovoTicket(){
+  const ns=document.getElementById("nt_setor");
+  if(ns&&_setorAtual&&[...ns.options].some(o=>o.value===_setorAtual)){ns.value=_setorAtual;try{filtrarRespNovo();}catch(e){}}
   const m=_modInfo(_moduloAtual);
   const h=document.querySelector("#conteudo h2");if(h)h.innerHTML=`Novo Ticket <span class="mod-pill" style="background:${m.cor};font-size:12px;vertical-align:middle;">${m.icone} ${m.nome}</span>`;
   const voltar=document.querySelectorAll('#conteudo button[onclick="mostrarTickets()"]');
@@ -3851,9 +3853,11 @@ window.abaUsuarios=function(){
   const info=box.querySelector("div");if(info&&info.textContent.includes("Perfis:"))info.innerHTML=`<b>📋 Perfis:</b> 🔵 <b>ADM</b> — acesso total &nbsp;|&nbsp; ⚪ <b>Auxiliar</b> — acessa só o que estiver marcado na tabela de acessos (por módulo). Modelos prontos em <b>🔐 Perfis de Acesso</b>.`;
   const bAdd=box.querySelector('button[onclick="addUsuario()"]');
   const ns0=document.getElementById("novoUserSenha");if(ns0){ns0.placeholder="Senha provisória";const lb=ns0.previousElementSibling;if(lb)lb.textContent="Senha provisória *";}
+  _blocoSetoresUsuario("novoUserSetor","novo",{perfil:"auxiliar",setoresAcesso:[]},"novoUserPerfil");
   if(bAdd){bAdd.insertAdjacentHTML("beforebegin",_blocoPermUsuario("novo",{perfil:"auxiliar",permissoes:_permVazia()}));_ligarPerfilSelect("novoUserPerfil","novo");}
   usuarios.forEach((u,i)=>{const b=box.querySelector(`button[onclick="salvarEdicaoUsuario(${i})"]`);if(!b)return;
     b.parentElement.insertAdjacentHTML("beforebegin",_blocoPermUsuario("u"+i,u));_ligarPerfilSelect("eu-perfil-"+i,"u"+i);
+    _blocoSetoresUsuario("eu-setor-"+i,"u"+i,u,"eu-perfil-"+i);
     const proprio=usuarioLogado&&u._id===usuarioLogado._id;
     b.insertAdjacentHTML("afterend",proprio?"":`<button class="btn-warning" onclick="abrirResetSenha(${i})">🔑 Resetar senha</button>`);
     b.parentElement.insertAdjacentHTML("beforeend",u.trocarSenha?`<span class="senha-pend">🔑 Aguardando o usuário criar a nova senha${u.senhaResetadaEm?` · senha provisória definida em ${formatarData(u.senhaResetadaEm)}${u.senhaResetadaPor?` por ${escHtml(u.senhaResetadaPor)}`:""}`:""}</span>`
@@ -3863,7 +3867,7 @@ window.abaUsuarios=function(){
     if(badge&&u.perfilAcesso)badge.textContent=u.perfilAcesso;});
 };
 window.salvarUsuario=async function(u){try{
-  const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||"",totpSecret:u.totpSecret||"",permissoes:u.permissoes||null,perfilAcesso:u.perfilAcesso||"",trocarSenha:!!u.trocarSenha,senhaAlteradaEm:u.senhaAlteradaEm||"",senhaResetadaEm:u.senhaResetadaEm||"",senhaResetadaPor:u.senhaResetadaPor||""};
+  const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||"",totpSecret:u.totpSecret||"",permissoes:u.permissoes||null,perfilAcesso:u.perfilAcesso||"",trocarSenha:!!u.trocarSenha,setoresAcesso:Array.isArray(u.setoresAcesso)?u.setoresAcesso:null,senhaAlteradaEm:u.senhaAlteradaEm||"",senhaResetadaEm:u.senhaResetadaEm||"",senhaResetadaPor:u.senhaResetadaPor||""};
   if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}
 }catch(e){console.error(e);}};
 window.addUsuario=async function(){
@@ -3871,13 +3875,15 @@ window.addUsuario=async function(){
   if(!n){alert("Informe o nome.");return;}
   if(usuarios.some(u=>(u.nome||"").trim().toLowerCase()===n.toLowerCase())){alert("Já existe um usuário com esse nome.");return;}
   if(!se){alert("Informe uma senha provisória. O usuário vai criar a senha dele no primeiro acesso.");return;}
-  const novo={nome:n,perfil:p,setor:s,senha:se,email:em,trocarSenha:true,senhaResetadaEm:agora(),senhaResetadaPor:usuarioLogado.nome,permissoes:_lerMatriz("novo"),perfilAcesso:document.getElementById("permtpl-novo")?.value||""};
+  const sa=_lerSetoresUsuario("novo");if(p!=="adm"&&!sa.length){alert("Marque pelo menos um setor que o usuário pode acessar.");return;}
+  const novo={nome:n,perfil:p,setor:sa[0]||"",setoresAcesso:sa,senha:se,email:em,trocarSenha:true,senhaResetadaEm:agora(),senhaResetadaPor:usuarioLogado.nome,permissoes:_lerMatriz("novo"),perfilAcesso:document.getElementById("permtpl-novo")?.value||""};
   usuarios.push(novo);await salvarUsuario(novo);abaUsuarios();
 };
 window.salvarEdicaoUsuario=async function(i){
   const n=document.getElementById("eu-nome-"+i).value.trim(),p=document.getElementById("eu-perfil-"+i).value,s=document.getElementById("eu-setor-"+i).value,ns=document.getElementById("eu-senha-"+i).value,em=(document.getElementById("eu-email-"+i)?.value||"").trim();
   if(!n){alert("Nome vazio.");return;}
-  const u=usuarios[i];u.nome=n;u.perfil=p;u.setor=s;u.email=em;
+  const sa=_lerSetoresUsuario("u"+i);if(p!=="adm"&&!sa.length){alert("Marque pelo menos um setor que o usuário pode acessar.");return;}
+  const u=usuarios[i];u.nome=n;u.perfil=p;u.setoresAcesso=sa;u.setor=sa.includes(u.setor)?u.setor:(sa[0]||"");u.email=em;
   if(ns!==""){u.senha=ns;if(!(usuarioLogado&&u._id===usuarioLogado._id)){u.trocarSenha=true;u.senhaResetadaEm=agora();u.senhaResetadaPor=usuarioLogado.nome;}}
   u.permissoes=_lerMatriz("u"+i);u.perfilAcesso=document.getElementById("permtpl-u"+i)?.value||"";
   await salvarUsuario(u);alert("Usuário salvo!");
@@ -4027,6 +4033,159 @@ window.confirmarResetSenha=async function(){
   _toast(`Senha de ${u.nome} resetada. Ele vai criar uma nova no próximo acesso.`);
   if(_telaAtual==="cadastros")abaUsuarios();
 };
+
+
+/* ============================================================
+   ESCOLHA DE SETOR APÓS O LOGIN
+   - Cada usuário tem "setoresAcesso" (um ou mais). ADM acessa todos.
+   - Depois do login ele escolhe o setor; todos os menus funcionam
+     dentro do setor escolhido (tickets, dashboards, tarefas...).
+   ============================================================ */
+const SETORES_PADRAO=["Comercial","Credenciamento","Implantação","Suporte","Pós Venda"];
+const SETOR_ICONE={comercial:"💼",credenciamento:"📝",implantacao:"🛠️",suporte:"🎧",posvenda:"💬"};
+let _setorAtual="",_setorEscolhido=false;
+function _normSetor(x){return(x||"").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]/g,"");}
+function _iconeSetor(x){return SETOR_ICONE[_normSetor(x)]||"📁";}
+function _setorLegado(u){
+  if(u.setor&&u.setor.trim())return u.setor.trim();
+  const r=responsaveis.find(r=>(r.nome||"").toLowerCase()===(u.nome||"").toLowerCase());return r?r.setor:"";
+}
+function _setoresDoUsuario(u){
+  u=u||usuarioLogado;if(!u)return[];
+  if(u.perfil==="adm")return[...setores];
+  if(Array.isArray(u.setoresAcesso)&&u.setoresAcesso.length)return setores.filter(s=>u.setoresAcesso.includes(s));
+  const st=_setorLegado(u);if(st)return[st];
+  return[...setores];
+}
+window.setorDoUsuario=function(){
+  if(_setorEscolhido)return _setorAtual;
+  if(usuarioLogado&&usuarioLogado.perfil==="adm")return"";
+  return usuarioLogado?_setorLegado(usuarioLogado):"";
+};
+async function _garantirSetoresPadrao(){
+  if(!usuarioLogado||usuarioLogado.perfil!=="adm")return;
+  const tem=new Set(setores.map(_normSetor));const faltam=SETORES_PADRAO.filter(x=>!tem.has(_normSetor(x)));
+  if(!faltam.length)return;
+  setores.push(...faltam);
+  const ordem=x=>{const k=SETORES_PADRAO.findIndex(p=>_normSetor(p)===_normSetor(x));return k<0?99:k;};
+  setores.sort((a,b)=>ordem(a)-ordem(b));
+  try{await salvarSetores();}catch(e){console.error(e);}
+}
+
+(function(){
+  const css=`
+  #escolhaSetorTela{position:fixed;inset:0;background:#eef2f7;z-index:1900;display:none;align-items:flex-start;justify-content:center;padding:6vh 16px 24px;overflow:auto;}
+  .es-box{width:100%;max-width:760px;}
+  .es-box h2{margin:0 0 4px;font-size:24px;color:#1f2937;}
+  .es-sub{color:#6c757d;font-size:14px;margin-bottom:22px;}
+  .es-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:14px;}
+  .es-card{display:flex;align-items:center;gap:14px;background:white;border:2px solid #e3e6f0;border-radius:12px;padding:18px 16px;cursor:pointer;text-align:left;width:100%;margin:0;color:#1f2937;font-size:14px;box-shadow:0 2px 8px rgba(0,0,0,.05);transition:border-color .15s,transform .15s;}
+  .es-card:hover{border-color:#4e73df;transform:translateY(-2px);}
+  .es-card:focus-visible{outline:3px solid #4e73df;outline-offset:2px;}
+  .es-card.atual{border-color:#4e73df;background:#f0f4ff;}
+  .es-ico{font-size:28px;width:48px;height:48px;border-radius:12px;background:#f4f6fb;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+  .es-nome{font-weight:700;font-size:15px;}
+  .es-cont{font-size:12px;color:#6c757d;margin-top:2px;}
+  .es-todos{border-style:dashed;}
+  .es-rodape{display:flex;justify-content:space-between;align-items:center;margin-top:22px;gap:10px;flex-wrap:wrap;}
+  .setor-box{background:#111827;border-radius:9px;padding:9px 10px;margin-bottom:10px;display:flex;align-items:center;gap:8px;}
+  .setor-box .sb-ico{font-size:18px;}
+  .setor-box .sb-txt{flex:1;min-width:0;font-size:11px;color:#9ca3af;line-height:1.2;}
+  .setor-box .sb-txt b{display:block;color:white;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sidebar .setor-box button{width:auto;margin:0;padding:5px 8px;font-size:11px;background:#374151;color:#e5e7eb;}
+  .setor-acc{margin-top:10px;border:1px solid #e3e6f0;border-radius:8px;background:#fbfcff;padding:10px 12px;font-size:12px;}
+  .setor-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+  .setor-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid #d0d9f0;background:white;border-radius:20px;padding:5px 12px;cursor:pointer;font-size:12px;font-weight:600;margin:0;}
+  .setor-chip input{margin:0;width:auto;}
+  .setor-chip:has(input:checked){background:#4e73df;border-color:#4e73df;color:white;}
+  #filtroVisao{display:none!important;}
+  `;
+  const st=document.createElement("style");st.textContent=css;document.head.appendChild(st);
+  const fv=document.getElementById("filtroVisao");const lb=fv&&fv.previousElementSibling;if(lb&&lb.tagName==="LABEL")lb.style.display="none";
+  const sw=document.getElementById("moduloSwitch");if(sw)sw.insertAdjacentHTML("beforebegin",'<div id="setorAtualBox"></div>');
+  _injetar("escolhaSetorTela",`<div id="escolhaSetorTela" role="dialog" aria-modal="true" aria-labelledby="esTitulo"><div class="es-box"><h2 id="esTitulo">Em qual setor você quer entrar?</h2><div class="es-sub" id="esSub"></div><div class="es-grid" id="esGrid"></div><div class="es-rodape" id="esRodape"></div></div></div>`);
+})();
+
+function _abertosNoSetor(st){
+  const mods=_modulosPermitidos();
+  return tickets.filter(t=>(st===""||t.setor===st)&&mods.includes(_modTicket(t))&&!_ticketFechado(t)).length;
+}
+function _abrirEscolhaSetor(trocando){
+  _garantirSetoresPadrao();
+  const lista=_setoresDoUsuario();
+  if(!trocando&&lista.length===1){_definirSetor(lista[0]);return;}
+  const isAdm=usuarioLogado.perfil==="adm";
+  const tela=document.getElementById("escolhaSetorTela");
+  document.getElementById("esSub").innerHTML=`Olá, <b>${escHtml(usuarioLogado.nome)}</b>. ${lista.length?"Escolha o setor para trabalhar agora. Você pode trocar depois pelo menu lateral.":""}`;
+  const card=(st,nome,ico,extra)=>`<button class="es-card ${extra||""} ${_setorEscolhido&&_setorAtual===st?"atual":""}" onclick="_definirSetor(${JSON.stringify(st).replace(/"/g,"&quot;")})"><span class="es-ico">${ico}</span><span><div class="es-nome">${escHtml(nome)}</div><div class="es-cont">${_abertosNoSetor(st)} ticket(s) em aberto</div></span></button>`;
+  document.getElementById("esGrid").innerHTML=lista.length?lista.map(st=>card(st,st,_iconeSetor(st))).join("")+(isAdm?card("","Todos os setores","🌐","es-todos"):"")
+    :`<div class="card" style="grid-column:1/-1;border-left-color:#e74a3b;">Seu usuário não tem acesso a nenhum setor. Peça a um administrador para liberar em <b>Cadastros → Usuários</b>.</div>`;
+  document.getElementById("esRodape").innerHTML=trocando?`<span></span><button class="btn-dark" onclick="document.getElementById('escolhaSetorTela').style.display='none'">Cancelar</button>`:`<span style="font-size:12px;color:#888;">Entrou como ${escHtml(usuarioLogado.nome)}</span><button class="btn-dark" onclick="logout()">Sair</button>`;
+  if(!trocando)document.getElementById("crmApp").style.display="none";
+  tela.style.display="flex";
+  setTimeout(()=>{const b=tela.querySelector(".es-card");if(b)b.focus();},50);
+}
+window._abrirEscolhaSetor=_abrirEscolhaSetor;
+window._definirSetor=function(st){
+  const lista=_setoresDoUsuario();
+  if(st===""?usuarioLogado.perfil!=="adm":!lista.includes(st))return;
+  const primeira=!_setorEscolhido;
+  _setorAtual=st;_setorEscolhido=true;
+  document.getElementById("escolhaSetorTela").style.display="none";
+  document.getElementById("crmApp").style.display="flex";
+  closeSidebar();
+  if(primeira){_entrarNoCrm();}
+  else{_aplicarNav();
+    const mapa={tickets:["ver",()=>mostrarTickets()],dashboard:["dashboards",()=>mostrarDashboard()],tarefas:["tarefas",()=>mostrarTarefas()],docrecusada:[null,()=>mostrarDocRecusada()]};
+    const at=mapa[_telaAtual];if(at&&(!at[0]||_pode(at[0])))at[1]();else _irInicio();}
+  _toast(`Setor: ${st||"Todos os setores"}`);
+};
+window.atualizarSeletorVisao=function(){
+  if(!usuarioLogado)return;
+  const fv=document.getElementById("filtroVisao");if(fv){fv.innerHTML=`<option value="todos">Todos</option>`;fv.value="todos";}
+  const si=document.getElementById("setorInfo");if(si)si.innerHTML="";
+  const box=document.getElementById("setorAtualBox");if(!box)return;
+  if(!_setorEscolhido){box.innerHTML="";return;}
+  const varios=_setoresDoUsuario().length>1||usuarioLogado.perfil==="adm";
+  box.innerHTML=`<div class="setor-box"><span class="sb-ico">${_setorAtual?_iconeSetor(_setorAtual):"🌐"}</span><span class="sb-txt">Setor<b title="${escHtml(_setorAtual||"Todos os setores")}">${escHtml(_setorAtual||"Todos os setores")}</b></span>${varios?`<button onclick="_abrirEscolhaSetor(true)">Trocar</button>`:""}</div>`;
+};
+const _aplicarNavSetorOrig=_aplicarNav;
+_aplicarNav=function(){_aplicarNavSetorOrig.apply(this,arguments);try{atualizarSeletorVisao();
+  const bn=document.getElementById("moduloBanner");
+  if(bn&&_setorEscolhido&&bn.innerHTML)bn.insertAdjacentHTML("beforeend",`<span class="mod-pill" style="background:#374151;">${_setorAtual?_iconeSetor(_setorAtual):"🌐"} ${escHtml(_setorAtual||"Todos os setores")}</span>`);
+}catch(e){}};
+/* garante os setores padrão quando um ADM entra */
+const _loginSetorOrig=window.login;
+window.login=async function(){
+  if(usuarioLogado&&_setorEscolhido)return _loginSetorOrig.apply(this,arguments);
+  _setorEscolhido=false;_setorAtual="";
+  const r=await _loginSetorOrig.apply(this,arguments);
+  if(usuarioLogado&&usuarioLogado.perfil==="adm")_garantirSetoresPadrao();
+  return r;
+};
+/* se os acessos do usuário logado mudarem e ele perder o setor atual, volta para a escolha */
+const _atualizarTelaSetorOrig=window._atualizarTelaAtual;
+window._atualizarTelaAtual=function(){
+  if(usuarioLogado&&_setorEscolhido&&_setorAtual&&!_setoresDoUsuario().includes(_setorAtual)){_setorEscolhido=false;_setorAtual="";_abrirEscolhaSetor(false);return;}
+  return _atualizarTelaSetorOrig.apply(this,arguments);
+};
+
+/* Cadastro de usuário: checkboxes de setores */
+function _blocoSetoresUsuario(selId,prefix,u,perfilSelId){
+  const sel=document.getElementById(selId);if(!sel)return;
+  const campo=sel.parentElement;campo.style.display="none";
+  const grid=campo.parentElement;
+  const marcados=Array.isArray(u.setoresAcesso)&&u.setoresAcesso.length?u.setoresAcesso:(_setorLegado(u)?[_setorLegado(u)]:[]);
+  const isAdm=u.perfil==="adm";
+  grid.insertAdjacentHTML("afterend",`<div class="setor-acc" id="setacc-${prefix}">
+    <b>📍 Setores com acesso</b> <span style="color:#888;">— o usuário escolhe um deles ao entrar no CRM</span>
+    <div id="setacc-adm-${prefix}" style="display:${isAdm?"block":"none"};color:#4e73df;margin-top:6px;">🔵 ADM acessa todos os setores (e também a visão "Todos os setores").</div>
+    <div class="setor-chips" id="setacc-chips-${prefix}" style="display:${isAdm?"none":"flex"};">${setores.map((st,k)=>`<label class="setor-chip"><input type="checkbox" id="setacc-${prefix}-${k}" ${marcados.includes(st)?"checked":""}> ${_iconeSetor(st)} ${escHtml(st)}</label>`).join("")||'<span style="color:#999;">Cadastre setores na aba Setores.</span>'}</div>
+  </div>`);
+  const ps=document.getElementById(perfilSelId);
+  if(ps)ps.addEventListener("change",()=>{const adm=ps.value==="adm";document.getElementById("setacc-adm-"+prefix).style.display=adm?"block":"none";document.getElementById("setacc-chips-"+prefix).style.display=adm?"none":"flex";});
+}
+function _lerSetoresUsuario(prefix){return setores.filter((st,k)=>document.getElementById(`setacc-${prefix}-${k}`)?.checked);}
 
 </script>
 </body>
