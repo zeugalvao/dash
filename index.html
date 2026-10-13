@@ -176,6 +176,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
 <div id="crmApp" style="display:none;width:100%;flex-direction:row;">
   <div class="sidebar" id="mainSidebar">
     <h2 style="margin-top:0;">CRM</h2>
+    <div id="moduloSwitch"></div>
     <button class="btn-primary" onclick="mostrarTickets();closeSidebar()">🎫 Tickets</button>
     <button class="btn-success" id="btnCadastros" onclick="mostrarCadastros();closeSidebar()">📋 CADASTROS</button>
     <button style="background:#6f42c1;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white;font-size:12px;margin-bottom:10px;width:100%;" id="btnDashboard" onclick="mostrarDashboard();closeSidebar()">📊 DASHBOARDS</button>
@@ -190,7 +191,7 @@ button{padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white
     <button id="btnBackup" onclick="abrirModalBackup();closeSidebar()" style="background:#2d6a4f;margin-top:8px;padding:6px 12px;border:none;border-radius:6px;cursor:pointer;color:white;font-size:12px;margin-bottom:10px;width:100%;">💾 Backup / Restaurar</button>
     <button class="btn-dark" onclick="logout()" style="margin-top:auto;">Sair</button>
   </div>
-  <div class="main"><div id="conteudo"></div></div>
+  <div class="main"><div id="moduloBanner"></div><div id="conteudo"></div></div>
 </div>
 
 <div id="modalTransf" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>🔀 Transferir Ticket</h3><p id="modalTransfInfo" style="font-size:13px;color:#555;margin-bottom:14px;"></p><label><b>Setor de destino:</b></label><select id="modalSetorDestino" style="margin:6px 0 16px;"></select><div style="display:flex;gap:8px;"><button class="btn-primary" onclick="confirmarTransferencia()">Confirmar Transferência</button><button class="btn-dark" onclick="fecharModal('modalTransf')">Cancelar</button></div></div></div>
@@ -699,8 +700,8 @@ function horasUteisEntre(inicio,fim){
   return total;
 }
 
-function calcularSLARestante(ticket){const srvs=ticket.servicosTicket||[];const abertura=ticket.dataAbertura;let pH=null,pP=0,pA=false,tem=false;const ativos=srvs.filter(s=>!s.finalizado?.marcado&&!s.expirado?.marcado);if(ativos.length){ativos.forEach(s=>{const sc=servicosCadastro.find(c=>c.nome===s.nome);if(!sc||!sc.sla)return;tem=true;const dec=horasUteisEntre(abertura,Date.now());const res=sc.sla-dec;const p=Math.min(100,Math.round((dec/sc.sla)*100));if(pH===null||res<pH){pH=res;pP=p;pA=res<0;}});}else if(!srvs.length){const n=ticket.servico||"";if(n){const sc=servicosCadastro.find(s=>s.nome===n);if(sc&&sc.sla){tem=true;const dec=horasUteisEntre(abertura,Date.now());pH=sc.sla-dec;pP=Math.min(100,Math.round((dec/sc.sla)*100));pA=pH<0;}}}if(!tem)return null;return{horas:pH,atrasado:pA,porcentagem:pP};}
-function calcularSLAServico(ticket,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return null;const sc=servicosCadastro.find(c=>c.nome===srv.nome);if(!sc||!sc.sla)return null;const dec=horasUteisEntre(ticket.dataAbertura,Date.now());const res=sc.sla-dec;return{horas:res,atrasado:res<0,porcentagem:Math.min(100,Math.round((dec/sc.sla)*100)),slaTotal:sc.sla};}
+function calcularSLARestante(ticket){const srvs=ticket.servicosTicket||[];const abertura=_inicioSLA(ticket);if(!abertura)return null;let pH=null,pP=0,pA=false,tem=false;const ativos=srvs.filter(s=>!s.finalizado?.marcado&&!s.expirado?.marcado);if(ativos.length){ativos.forEach(s=>{const sc=servicosCadastro.find(c=>c.nome===s.nome);if(!sc||!sc.sla)return;tem=true;const dec=horasUteisEntre(abertura,Date.now());const res=sc.sla-dec;const p=Math.min(100,Math.round((dec/sc.sla)*100));if(pH===null||res<pH){pH=res;pP=p;pA=res<0;}});}else if(!srvs.length){const n=ticket.servico||"";if(n){const sc=servicosCadastro.find(s=>s.nome===n);if(sc&&sc.sla){tem=true;const dec=horasUteisEntre(abertura,Date.now());pH=sc.sla-dec;pP=Math.min(100,Math.round((dec/sc.sla)*100));pA=pH<0;}}}if(!tem)return null;return{horas:pH,atrasado:pA,porcentagem:pP};}
+function calcularSLAServico(ticket,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return null;const sc=servicosCadastro.find(c=>c.nome===srv.nome);if(!sc||!sc.sla)return null;const _ini=_inicioSLA(ticket);if(!_ini)return null;const dec=horasUteisEntre(_ini,Date.now());const res=sc.sla-dec;return{horas:res,atrasado:res<0,porcentagem:Math.min(100,Math.round((dec/sc.sla)*100)),slaTotal:sc.sla};}
 function _normalizarAguardandoCliente(t){if(!t)return;if(typeof t.aguardandoClienteAcumuladoMs!=="number")t.aguardandoClienteAcumuladoMs=0;if(t.status==="Aguardando cliente"&&!t.aguardandoClienteInicio)t.aguardandoClienteInicio=t.pendenciaClienteData||t.ultimaAtualizacao||t.dataAbertura||agora();if(t.status!=="Aguardando cliente"&&t.aguardandoClienteInicio)finalizarAguardandoCliente(t,agora());}
 function iniciarAguardandoCliente(t,iso){if(!t)return;if(typeof t.aguardandoClienteAcumuladoMs!=="number")t.aguardandoClienteAcumuladoMs=0;t.aguardandoClienteInicio=iso||agora();}
 function finalizarAguardandoCliente(t,iso){if(!t)return
@@ -713,8 +714,8 @@ function elegivelEncerrarPorFaltaResposta(t){return horasAguardandoClienteAcumul
    ============================================================ */
 function mostrarCadastros(){
   _telaAtual="cadastros";_ticketAbertoId=null;
-  if(usuarioLogado.perfil!=="adm"){alert("Acesso restrito.");return;}
-  document.getElementById("conteudo").innerHTML=`<div class="card"><h2 style="margin-top:0;">Cadastros</h2><div class="tabs"><button class="btn-warning" onclick="abaServicos()">Serviços</button><button class="btn-warning" onclick="abaSetores()">Setores</button><button class="btn-warning" onclick="abaResponsaveis()">Responsáveis</button><button class="btn-warning" onclick="abaUsuarios()">Usuários</button><button class="btn-warning" onclick="abaFeriados()">📅 Feriados</button></div><div id="abaConteudo"></div></div>`;
+  if(!_pode("cadastros")){alert("Seu perfil não tem acesso aos Cadastros.");return;}
+  document.getElementById("conteudo").innerHTML=`<div class="card"><h2 style="margin-top:0;">Cadastros</h2><div class="tabs"><button class="btn-warning" onclick="abaServicos()">Serviços</button><button class="btn-warning" onclick="abaSetores()">Setores</button><button class="btn-warning" onclick="abaResponsaveis()">Responsáveis</button><button class="btn-warning" onclick="abaUsuarios()">Usuários</button><button class="btn-warning" onclick="abaFeriados()">📅 Feriados</button><button class="btn-warning" onclick="abaPerfisAcesso()">🔐 Perfis de Acesso</button><button class="btn-warning" onclick="abaChecklist()">☑️ Checklist</button></div><div id="abaConteudo"></div></div>`;
   abaServicos();
 }
 function abaServicos(){document.getElementById("abaConteudo").innerHTML=`<h3>Serviços</h3><div style="background:#e8f0ff;border:1px solid #4e73df;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#1f2937;">ℹ️ <b>SLA em dias úteis:</b> o SLA informado em horas é calculado <b>apenas em dias úteis</b> (segunda a sexta), desconsiderando sábados, domingos e feriados cadastrados. Ex.: 48h de SLA = 2 dias úteis. Cadastre os feriados na aba <b>📅 Feriados</b>.</div><div style="display:grid;grid-template-columns:1fr 110px auto;gap:8px;margin-bottom:14px;padding:10px;background:#f4f6fb;border-radius:8px;"><input id="novoServicoNome" placeholder="Nome do Serviço"><input id="novoServicoSLA" type="number" placeholder="SLA (horas úteis)" min="1"><button class="btn-success" onclick="addServico()">+ Adicionar</button></div>${servicosCadastro.length===0?'<p style="color:#999;font-style:italic;">Nenhum serviço cadastrado.</p>':servicosCadastro.map((s,i)=>`<div class="servico-item" id="srv-cad-${i}"><input id="ed-sn-${i}" value="${escHtml(s.nome)}"><input id="ed-ss-${i}" type="number" value="${s.sla}" min="1"><button class="btn-info" onclick="salvarServico(${i})">Salvar</button><button class="btn-danger" onclick="excluirServicoCad(${i})">Excluir</button></div>`).join("")}`;}
@@ -875,6 +876,7 @@ function mostrarTickets(){
           <option value="lib_parcial">Lib. parcialmente</option>
           <option value="pend_cliente">Pend. Cliente</option>
           <option value="adquirentes_lib">Adquirentes liberadas</option>
+          <option value="checklist_pend">☑️ Checklist pendente</option>
           <option value="iniciados">Iniciados</option>
           <option value="concluidos">Concluídos/Cancelados</option>
         </select>
@@ -910,6 +912,7 @@ function filtrarTickets(){
   else if(alerta==="alerta_48")lista=lista.filter(t=>precisaAtualizacao48h(t));
   else if(alerta==="iniciados")lista=lista.filter(t=>temServicoIniciado(t));
   else if(alerta==="adquirentes_lib")lista=lista.filter(t=>temAdquirenteLiberada(t));
+  else if(alerta==="checklist_pend")lista=lista.filter(t=>_checklistPendente(t)&&!["Concluído","Encerrado","Cancelado"].includes(t.status));
   else if(alerta==="concluidos")lista=lista.filter(t=>["Concluído","Cancelado"].includes(t.status));
   if(document.getElementById("filtroMeusTickets")?.checked&&usuarioLogado){lista=lista.filter(t=>_isTicketMeu(t));}
   if(respFiltro)lista=lista.filter(t=>{if((t.responsavel||"")===respFiltro)return true;return(t.servicosTicket||[]).some(s=>(s.iniciado?.responsavel||"")===respFiltro||(s.finalizado?.responsavel||"")===respFiltro);});
@@ -1104,7 +1107,7 @@ function verTicket(id,_rt=false){
         <button class="btn-purple" onclick="abrirModalTransf('${t.id}')">🔀 Transferir Setor</button>
         ${t.status==="Aguardando cliente"?`<button class="btn-warning" style="color:#000;" onclick="abrirModalRetomarAndamento('${t.id}')">▶️ Retomar Andamento</button>`:`<button class="btn-pink" onclick="prepararAguardandoCliente('${t.id}')">⏳ Aguardando Cliente</button>`}
         <button class="btn-danger" onclick="abrirModalEncerrarTicket('${t.id}')">✅ Encerrar Ticket</button>
-        ${isAdm?`<button class="btn-danger" onclick="excluirTicket('${t.id}')">🗑 Excluir</button>`:""}
+        ${_pode("excluir",_modTicket(t))?`<button class="btn-danger" onclick="excluirTicket('${t.id}')">🗑 Excluir</button>`:""}
         <button class="btn-dark" onclick="mostrarTickets()">← Voltar</button>
       </div>
     </div>
@@ -1621,7 +1624,7 @@ function renderHistorico(historico){
    BACKUP & RESTAURAÇÃO
    ============================================================ */
 function abrirModalBackup(){
-  if(usuarioLogado.perfil!=="adm"){alert("Acesso restrito. Apenas administradores podem fazer backup.");return;}
+  if(!_pode("backup")){alert("Seu perfil não tem acesso ao Backup.");return;}
   const info=document.getElementById("backupInfo");
   if(info)info.innerHTML=`📊 <b>${tickets.length}</b> tickets &nbsp;|&nbsp; <b>${usuarios.length}</b> usuários &nbsp;|&nbsp; <b>${responsaveis.length}</b> responsáveis &nbsp;|&nbsp; <b>${servicosCadastro.length}</b> serviços &nbsp;|&nbsp; <b>${setores.length}</b> setores`;
   const prev=document.getElementById("previewRestaurar");const btnConf=document.getElementById("btnConfirmarRestaurar");const restInfo=document.getElementById("restaurarInfo");
@@ -1949,7 +1952,7 @@ async function _bkpListar(){
 function _destroyChart(id){if(_charts[id]){_charts[id].destroy();delete _charts[id];}}
 function _difHoras(a,b){if(!a||!b)return null;const d=(new Date(b)-new Date(a))/3600000;return d>=0?d:null;}
 function _horasPendenciaCliente(ticket){if(!ticket.pendenciaClienteData)return 0;const fim=ticket.status==="Aguardando cliente"?new Date().toISOString():(ticket.ultimaAtualizacao||new Date().toISOString());return _difHoras(ticket.pendenciaClienteData,fim)||0;}
-function _horasAtrasoServico(ticket,srv){if(!srv.iniciado?.marcado)return 0;const sc=servicosCadastro.find(s=>s.nome===srv.nome);if(!sc||!sc.sla)return 0;const ref=ticket.dataChegadaCredenciamento||ticket.dataAbertura;const fim=srv.finalizado?.marcado?srv.finalizado.data:new Date().toISOString();const dec=horasUteisEntre(ref,fim);return Math.max(0,dec-sc.sla);}
+function _horasAtrasoServico(ticket,srv){if(!srv.iniciado?.marcado)return 0;const sc=servicosCadastro.find(s=>s.nome===srv.nome);if(!sc||!sc.sla)return 0;const ref=ticket.checklistObrigatorio?ticket.slaInicio:(ticket.dataChegadaCredenciamento||ticket.dataAbertura);if(!ref)return 0;const fim=srv.finalizado?.marcado?srv.finalizado.data:new Date().toISOString();const dec=horasUteisEntre(ref,fim);return Math.max(0,dec-sc.sla);}
 
 function mostrarDashboard(){
   _telaAtual="dashboard";_ticketAbertoId=null;
@@ -2267,7 +2270,7 @@ function renderPainelAdquirentes(){
   /* Horas ÚTEIS decorridas desde abertura do ticket até agora (ou até finalização) */
   function _horasDecorridas(ticket,srv){
     const fim=srv.finalizado?.marcado&&srv.finalizado.data?srv.finalizado.data:new Date(now).toISOString();
-    return horasUteisEntre(ticket.dataAbertura,fim);
+    const _ini=_inicioSLA(ticket);if(!_ini)return 0;return horasUteisEntre(_ini,fim);
   }
 
   /* ── SEÇÃO 1: tickets com adquirente FORA da SLA do CADASTRO ── */
@@ -2992,6 +2995,7 @@ function mostrarTarefas(){
   /* ── filtro ─────────────────────────────────────────────────── */
   let lista=tickets.filter(t=>{
     if(["Concluído","Cancelado","Encerrado"].includes(t.status))return false;
+    if(!_ticketNoModulo(t))return false;
     if(meuSetor&&t.setor!==meuSetor)return false;
     return _isTicketMeu(t);
   });
@@ -3196,6 +3200,834 @@ carregarDadosFirebase().then(()=>{
   console.error("Falha ao inicializar:",err);
   document.body.innerHTML='<div style="text-align:center;padding:60px;font-family:sans-serif;"><h2>❌ Erro ao conectar com o banco de dados</h2><p>Verifique sua conexão com a internet e as configurações do Firebase.</p><p style="color:#999;">Detalhes no console (F12)</p></div>';
 });
+</script>
+<script>
+/* ============================================================
+   MÓDULOS (Vendas Internas / Revendas), PERFIS DE ACESSO
+   e CHECKLIST DE INÍCIO DO SLA
+   ------------------------------------------------------------
+   - Cada ticket pertence a um módulo (campo "modulo").
+     Tickets antigos sem o campo ficam em "Vendas Internas".
+   - Cada usuário Auxiliar tem uma matriz de permissões
+     (função x módulo). ADM continua com acesso total.
+   - Tickets novos recebem o checklist do módulo. O SLA dos
+     serviços só começa a contar quando todos os itens forem
+     marcados (campo "slaInicio"). Tickets antigos não mudam.
+   ============================================================ */
+
+const MODULOS=[
+  {id:"interno",nome:"Vendas Internas",icone:"🏢",cor:"#4e73df"},
+  {id:"revenda",nome:"Revendas",icone:"🤝",cor:"#fd7e14"}
+];
+const PERM_FUNCOES=[
+  {id:"ver",icone:"🎫",label:"Ver tickets",desc:"Lista de tickets e abrir um ticket"},
+  {id:"incluir",icone:"➕",label:"Incluir ticket",desc:"Criar novo ticket"},
+  {id:"alterar",icone:"✏️",label:"Alterar ticket",desc:"Dados, status, informações adicionais, pendência do cliente"},
+  {id:"servicos",icone:"🧩",label:"Gerenciar serviços",desc:"Adicionar, remover, iniciar, assinar, finalizar, expirar"},
+  {id:"checklist",icone:"☑️",label:"Marcar checklist",desc:"Checklist de início do SLA"},
+  {id:"transferir",icone:"🔀",label:"Transferir setor",desc:""},
+  {id:"encerrar",icone:"✅",label:"Encerrar ticket",desc:""},
+  {id:"excluir",icone:"🗑",label:"Excluir ticket",desc:""},
+  {id:"dashboards",icone:"📊",label:"Ver dashboards",desc:""},
+  {id:"tarefas",icone:"📌",label:"Ver tarefas",desc:""}
+];
+const PERM_GLOBAIS=[
+  {id:"cadastros",icone:"📋",label:"Cadastros",desc:"Serviços, setores, usuários, perfis, checklist"},
+  {id:"backup",icone:"💾",label:"Backup / Restaurar",desc:""}
+];
+
+function _permVazia(){const p={cadastros:false,backup:false};MODULOS.forEach(m=>{p[m.id]={};PERM_FUNCOES.forEach(f=>p[m.id][f.id]=false);});return p;}
+function _permCom(mods){const p=_permVazia();Object.keys(mods).forEach(m=>{(mods[m]||[]).forEach(f=>{if(p[m])p[m][f]=true;});});return p;}
+/* Auxiliar antigo (sem permissões salvas) = comportamento de antes: tudo em Vendas Internas, menos excluir */
+function _permLegado(){return _permCom({interno:["ver","incluir","alterar","servicos","checklist","transferir","encerrar","dashboards","tarefas"]});}
+
+const PERFIS_PADRAO=[
+  {nome:"Vendedor Revenda",permissoes:_permCom({revenda:["ver","incluir"]})},
+  {nome:"Vendedor Interno",permissoes:_permCom({interno:["ver","incluir"]})},
+  {nome:"Operador Credenciamento",permissoes:_permCom({interno:["ver","incluir","alterar","servicos","checklist","transferir","encerrar","tarefas"],revenda:["ver","incluir","alterar","servicos","checklist","transferir","encerrar","tarefas"]})}
+];
+const CHECKLIST_PADRAO={
+  interno:["Documentação do cliente recebida","Dados cadastrais conferidos","Contrato assinado","Serviços confirmados com o cliente"],
+  revenda:["Documentação do cliente recebida","Dados cadastrais conferidos","Contrato assinado","Revenda responsável identificada"]
+};
+
+let perfisAcesso=JSON.parse(JSON.stringify(PERFIS_PADRAO));
+let checklistItens=JSON.parse(JSON.stringify(CHECKLIST_PADRAO));
+let _moduloAtual="interno";
+let emailCredenciamento={interno:"",revenda:""};
+
+/* Configuração de acesso/checklist em tempo real (configuracoes/acesso) */
+try{
+  db.collection("configuracoes").doc("acesso").onSnapshot(doc=>{
+    if(doc.exists){const d=doc.data()||{};
+      if(Array.isArray(d.perfisAcesso))perfisAcesso=d.perfisAcesso;
+      if(d.emailCredenciamento&&typeof d.emailCredenciamento==="object")emailCredenciamento={interno:d.emailCredenciamento.interno||"",revenda:d.emailCredenciamento.revenda||""};
+      if(d.checklistItens&&typeof d.checklistItens==="object")checklistItens={interno:d.checklistItens.interno||[],revenda:d.checklistItens.revenda||[]};
+    }
+  },e=>console.error("acesso:",e));
+}catch(e){console.error(e);}
+async function _salvarConfigAcesso(){try{await db.collection("configuracoes").doc("acesso").set({perfisAcesso,checklistItens,emailCredenciamento},{merge:true});}catch(e){console.error(e);alert("Não foi possível salvar a configuração. Verifique a conexão.");}}
+
+/* ---------------- Helpers de permissão ---------------- */
+function _modTicket(t){return(t&&t.modulo)||"interno";}
+function _modInfo(id){return MODULOS.find(m=>m.id===id)||MODULOS[0];}
+function _ticketNoModulo(t){return _modTicket(t)===_moduloAtual;}
+function _permsDoUsuario(u){
+  if(!u)return _permVazia();
+  const base=_permVazia(),p=u.permissoes;
+  if(!p||typeof p!=="object")return _permLegado();
+  base.cadastros=!!p.cadastros;base.backup=!!p.backup;
+  MODULOS.forEach(m=>PERM_FUNCOES.forEach(f=>{base[m.id][f.id]=!!(p[m.id]&&p[m.id][f.id]);}));
+  return base;
+}
+function _pode(perm,mod){
+  if(!usuarioLogado)return false;
+  if(usuarioLogado.perfil==="adm")return true;
+  const p=_permsDoUsuario(usuarioLogado);
+  if(PERM_GLOBAIS.some(g=>g.id===perm))return!!p[perm];
+  const m=mod||_moduloAtual;return!!(p[m]&&p[m][perm]);
+}
+function _modulosPermitidos(){
+  if(!usuarioLogado)return[];
+  if(usuarioLogado.perfil==="adm")return MODULOS.map(m=>m.id);
+  const p=_permsDoUsuario(usuarioLogado);
+  return MODULOS.filter(m=>PERM_FUNCOES.some(f=>p[m.id][f.id])).map(m=>m.id);
+}
+function _negar(acao){alert("Seu perfil não tem permissão para: "+acao+".");}
+
+/* ---------------- Checklist / SLA ---------------- */
+function _inicioSLA(t){if(!t)return null;if(t.checklistObrigatorio)return t.slaInicio||null;return t.dataAbertura;}
+function _checklistPendente(t){return!!(t&&t.checklistObrigatorio&&!t.slaInicio);}
+
+/* Visão: mantém regra de setor e filtra pelo módulo atual */
+function ticketsVisiveis(){
+  let base;
+  if(usuarioLogado.perfil==="adm"){const v=document.getElementById("filtroVisao")?.value||"todos";base=v==="todos"?[...tickets]:tickets.filter(t=>t.setor===v);}
+  else{const st=setorDoUsuario();base=st?tickets.filter(t=>t.setor===st):[...tickets];}
+  return base.filter(_ticketNoModulo);
+}
+
+/* ---------------- Navegação / layout ---------------- */
+(function _injetarCss(){
+  const css=`
+  .mod-switch{display:flex;gap:4px;background:#111827;border-radius:9px;padding:4px;margin-bottom:12px;}
+  .sidebar .mod-switch button{flex:1;width:auto;margin:0;background:transparent;color:#9ca3af;font-weight:600;font-size:12px;padding:8px 4px;border-radius:6px;white-space:normal;line-height:1.2;}
+  .sidebar .mod-switch button.ativo{color:#fff;background:var(--mc);}
+  .mod-fixo{border-radius:8px;padding:8px 10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#fff;}
+  #moduloBanner:empty{display:none;}
+  #moduloBanner{display:flex;align-items:center;gap:10px;margin-bottom:12px;}
+  .mod-pill{display:inline-flex;align-items:center;gap:6px;color:#fff;font-weight:700;font-size:13px;padding:5px 12px;border-radius:20px;}
+  .mod-ro{font-size:12px;color:#6c757d;}
+  .perm-wrap{margin-top:10px;border:1px solid #e3e6f0;border-radius:8px;background:#fbfcff;overflow-x:auto;}
+  .perm-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-bottom:1px solid #e3e6f0;font-size:12px;}
+  .perm-head select{width:auto;min-width:180px;margin:0;}
+  .perm-table{width:100%;border-collapse:collapse;font-size:12px;min-width:420px;}
+  .perm-table th{background:#f0f4ff;padding:7px 10px;text-align:center;font-weight:600;border-bottom:1px solid #d0d9f0;}
+  .perm-table th:first-child,.perm-table td:first-child{text-align:left;}
+  .perm-table td{padding:6px 10px;border-bottom:1px solid #f0f0f0;text-align:center;}
+  .perm-table tr:last-child td{border-bottom:none;}
+  .perm-table .perm-desc{font-size:10px;color:#999;}
+  .perm-table .perm-sep td{background:#f4f6fb;font-weight:700;font-size:11px;color:#555;}
+  .perm-table a{font-size:10px;font-weight:400;color:#4e73df;cursor:pointer;text-decoration:underline;}
+  .perm-adm{padding:10px 12px;font-size:12px;color:#4e73df;}
+  .ck-box{border:2px solid #6c757d;border-radius:10px;padding:12px 14px;background:#f8f9fa;margin-bottom:4px;}
+  .ck-box.ok{border-color:#1cc88a;background:#f0faf4;}
+  .ck-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
+  .ck-prog{height:6px;background:#e3e6f0;border-radius:4px;overflow:hidden;margin-bottom:10px;}
+  .ck-prog div{height:100%;background:#1cc88a;transition:width .3s;}
+  .ck-item{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-top:1px solid #eceff4;font-size:13px;}
+  .ck-item label{flex:1;cursor:pointer;}
+  .ck-item.feito label{color:#155724;}
+  .ck-quem{font-size:10px;color:#888;}
+  .ck-cfg{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .ck-cfg-col{border:1px solid #e3e6f0;border-radius:8px;padding:12px;background:white;}
+  .ck-cfg-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+  .ck-cfg-row input{margin:0;}
+  .ck-item{align-items:center;}
+  .ck-btns{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
+  .ck-btns button{font-size:11px;padding:5px 9px;margin:0;}
+  .ck-motivo{border:1px solid;border-radius:6px;padding:6px 9px;margin-top:5px;font-size:12px;}
+  .doc-rec-card{display:flex;align-items:center;gap:14px;border-radius:10px;padding:12px 16px;margin-bottom:12px;cursor:pointer;background:white;border:2px solid #e3e6f0;color:#6c757d;}
+  .doc-rec-card.ativo{background:#e74a3b;border-color:#e74a3b;color:white;box-shadow:0 3px 10px rgba(231,74,59,.3);}
+  .doc-rec-card:focus-visible{outline:3px solid #1f2937;outline-offset:2px;}
+  .doc-rec-num{font-size:30px;font-weight:800;line-height:1;min-width:34px;text-align:center;}
+  .doc-rec-tit{font-weight:800;font-size:14px;letter-spacing:.3px;}
+  .doc-rec-sub{font-size:12px;opacity:.9;}
+  .doc-rec-abrir{font-size:12px;font-weight:700;border:1px solid currentColor;border-radius:6px;padding:5px 12px;}
+  .doc-rec-item{display:flex;gap:12px;align-items:center;flex-wrap:wrap;border:1px solid #f5c2c7;background:#fff8f8;border-radius:8px;padding:10px 12px;margin-top:10px;font-size:13px;}
+  @media(max-width:768px){.ck-cfg{grid-template-columns:1fr;}.ck-item{flex-wrap:wrap;}}
+  `;
+  const s=document.createElement("style");s.textContent=css;document.head.appendChild(s);
+  /* ids para os botões da sidebar que não tinham */
+  document.querySelectorAll("#mainSidebar button").forEach(b=>{const oc=b.getAttribute("onclick")||"";
+    if(oc.startsWith("mostrarTickets"))b.id="btnTickets";
+    if(oc.startsWith("novoTicket"))b.id="btnNovoTicket";});
+})();
+
+function _aplicarNav(){
+  if(!usuarioLogado)return;
+  const permitidos=_modulosPermitidos();
+  if(permitidos.length&&!permitidos.includes(_moduloAtual))_moduloAtual=permitidos[0];
+  const sw=document.getElementById("moduloSwitch");
+  if(sw){
+    if(permitidos.length>1){
+      sw.innerHTML=`<div class="mod-switch">${MODULOS.filter(m=>permitidos.includes(m.id)).map(m=>`<button class="${m.id===_moduloAtual?"ativo":""}" style="--mc:${m.cor};" onclick="_trocarModulo('${m.id}')">${m.icone} ${m.nome}</button>`).join("")}</div>`;
+    }else if(permitidos.length===1){const m=_modInfo(permitidos[0]);sw.innerHTML=`<div class="mod-fixo" style="background:${m.cor};">${m.icone} ${m.nome}</div>`;}
+    else sw.innerHTML="";
+  }
+  const vis=(id,ok)=>{const el=document.getElementById(id);if(el)el.style.display=ok?"block":"none";};
+  vis("btnTickets",_pode("ver"));vis("btnNovoTicket",_pode("incluir"));
+  vis("btnDashboard",_pode("dashboards"));vis("btnTarefas",_pode("tarefas"));
+  vis("btnCadastros",_pode("cadastros"));vis("btnBackup",_pode("backup"));
+  const pi=document.getElementById("perfilInfo");
+  if(pi)pi.innerHTML="Perfil: "+(usuarioLogado.perfil==="adm"?"<span class='perfil-badge-adm'>ADM</span>":`<span class='perfil-badge-auxiliar'>${escHtml(usuarioLogado.perfilAcesso||"Auxiliar")}</span>`);
+  const bn=document.getElementById("moduloBanner");
+  if(bn){const m=_modInfo(_moduloAtual);bn.innerHTML=permitidos.length?`<span class="mod-pill" style="background:${m.cor};">${m.icone} ${m.nome}</span>`:"";}
+}
+window._trocarModulo=function(m){
+  if(!_modulosPermitidos().includes(m))return;
+  _moduloAtual=m;_aplicarNav();closeSidebar();
+  const mapa={tickets:["ver",()=>mostrarTickets()],dashboard:["dashboards",()=>mostrarDashboard()],tarefas:["tarefas",()=>mostrarTarefas()]};
+  const atual=mapa[_telaAtual];
+  if(atual&&_pode(atual[0]))atual[1]();else _irInicio();
+};
+function _irInicio(msg){
+  if(_pode("ver"))mostrarTickets();
+  else if(_pode("tarefas"))mostrarTarefas();
+  else if(_pode("dashboards"))mostrarDashboard();
+  else _telaInicial(msg||"");
+  if(msg&&_pode("ver"))_toast(msg);
+}
+function _toast(msg){const t=document.createElement("div");t.style.cssText="position:fixed;bottom:20px;right:20px;background:#1cc88a;color:white;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:9999;max-width:360px;";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
+let _msgInicio="";
+function _telaInicial(msg){
+  if(msg!==undefined)_msgInicio=msg||"";msg=_msgInicio;
+  _telaAtual="inicio";_ticketAbertoId=null;
+  const m=_modInfo(_moduloAtual);
+  const semNada=!_modulosPermitidos().length;
+  document.getElementById("conteudo").innerHTML=`<div class="card" style="border-left-color:${m.cor};max-width:620px;">
+    ${msg?`<div style="background:#d4edda;border:1px solid #1cc88a;color:#155724;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:13px;">✅ ${escHtml(msg)}</div>`:""}
+    <h2 style="margin-top:0;">Olá, ${escHtml(usuarioLogado.nome)}</h2>
+    ${semNada?`<p style="color:#555;">Seu usuário ainda não tem acesso a nenhuma tela. Peça a um administrador para liberar em <b>Cadastros → Usuários</b>.</p>`
+      :`<p style="color:#555;margin-bottom:16px;">Você está em <b>${m.icone} ${m.nome}</b>.</p>
+      ${_pode("incluir")?`<button class="btn-primary" style="padding:12px 20px;font-size:14px;" onclick="novoTicket()">+ Incluir ticket</button>`:`<p style="color:#888;font-size:13px;">Nenhuma ação disponível neste módulo.</p>`}`}
+  </div>`;
+  if(!semNada)_injetarCardDocRecusada();
+}
+
+/* login: aplica módulos/permissões depois do login original */
+const _loginOrig=window.login;
+window.login=async function(){
+  await _loginOrig.apply(this,arguments);
+  if(!usuarioLogado||document.getElementById("crmApp").style.display!=="flex")return;
+  if(usuarioLogado.trocarSenha){_abrirTrocaSenhaObrigatoria();return;}
+  _entrarNoCrm();
+};
+function _entrarNoCrm(){
+  const perm=_modulosPermitidos();
+  _moduloAtual=perm[0]||"interno";
+  _aplicarNav();_irInicio();
+}
+const _logoutOrig=window.logout;
+window.logout=function(){_logoutOrig.apply(this,arguments);const sw=document.getElementById("moduloSwitch");if(sw)sw.innerHTML="";const bn=document.getElementById("moduloBanner");if(bn)bn.innerHTML="";};
+
+const _atualizarTelaOrig=window._atualizarTelaAtual;
+window._atualizarTelaAtual=function(){
+  if(!usuarioLogado)return;try{_aplicarNav();}catch(e){}
+  /* Cadastros não é recarregado automaticamente: antes qualquer alteração de outro usuário
+     (ex.: um ticket salvo) jogava a tela de volta para a aba Serviços e apagava o que estava sendo digitado. */
+  if(_telaAtual==="cadastros")return;
+  if(_telaAtual==="docrecusada"){try{mostrarDocRecusada();}catch(e){}return;}
+  if(_telaAtual==="inicio"){try{_telaInicial();}catch(e){}return;}
+  return _atualizarTelaOrig.apply(this,arguments);
+};
+
+/* ---------------- Guardas das telas ---------------- */
+function _guardTela(nome,perm,rotulo){
+  const orig=window[nome];
+  window[nome]=function(){
+    if(!usuarioLogado)return;
+    if(!_pode(perm)){if(perm==="ver"){_telaInicial();return;}_negar(rotulo);return;}
+    const r=orig.apply(this,arguments);
+    if(nome==="novoTicket")_ajustarNovoTicket();
+    if(nome==="mostrarTickets")_injetarCardDocRecusada();
+    return r;
+  };
+}
+_guardTela("mostrarTickets","ver","ver tickets");
+_guardTela("mostrarDashboard","dashboards","ver dashboards");
+_guardTela("mostrarTarefas","tarefas","ver tarefas");
+_guardTela("novoTicket","incluir","incluir ticket");
+
+function _ajustarNovoTicket(){
+  const m=_modInfo(_moduloAtual);
+  const h=document.querySelector("#conteudo h2");if(h)h.innerHTML=`Novo Ticket <span class="mod-pill" style="background:${m.cor};font-size:12px;vertical-align:middle;">${m.icone} ${m.nome}</span>`;
+  const voltar=document.querySelectorAll('#conteudo button[onclick="mostrarTickets()"]');
+  if(!_pode("ver"))voltar.forEach(b=>b.setAttribute("onclick","_irInicio()"));
+  const itens=(checklistItens[_moduloAtual]||[]).filter(x=>(x||"").trim());
+  const card=document.querySelector("#conteudo .card");
+  if(card&&itens.length){const d=document.createElement("div");
+    d.style.cssText="background:#f8f9fa;border:1px dashed #6c757d;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#374151;";
+    d.innerHTML=`☑️ Este ticket terá um <b>checklist de início</b> com ${itens.length} item(ns). O SLA dos serviços só começa a contar quando todos forem marcados dentro do ticket.`;
+    const grid=card.querySelector(".grid-2col");if(grid)card.insertBefore(d,grid);}
+}
+
+/* Criação do ticket: grava módulo e checklist */
+window.salvarNovoTicket=async function(){
+  if(!_pode("incluir")){_negar("incluir ticket");return;}
+  const titulo=document.getElementById("nt_titulo").value.trim();
+  const cliente=document.getElementById("nt_cliente").value.trim();
+  const cnpj=(document.getElementById("nt_cnpj")?.value||"").trim();
+  const setor=document.getElementById("nt_setor").value;
+  const responsavel=document.getElementById("nt_responsavel").value;
+  const prioridade=document.getElementById("nt_prioridade").value;
+  const status=document.getElementById("nt_status").value;
+  const canal=document.getElementById("nt_canal").value;
+  if(!titulo){alert("Selecione o título.");return;}if(!cliente){alert("Informe o cliente.");return;}if(!setor){alert("Selecione o setor.");return;}
+  const agr=agora();const isComercial=(setor||"").toLowerCase().includes("comercial");
+  const itens=(checklistItens[_moduloAtual]||[]).map(x=>(x||"").trim()).filter(Boolean);
+  const ticket={id:gerarId(),modulo:_moduloAtual,titulo,cliente,cnpj,setor,responsavel,prioridade,status,canal,descricao:"",obs:"",abertoPor:usuarioLogado.nome,abertoPorComercial:isComercial?usuarioLogado.nome:"",donoComercial:isComercial?usuarioLogado.nome:"",primeiroResponsavelCredenciamento:"",dataAbertura:agr,ultimaAtualizacao:agr,dataChegadaCredenciamento:(setor||"").toLowerCase().includes("credenci")?agr:null,dataTransferenciaComercial:isComercial?agr:null,servicosTicket:JSON.parse(JSON.stringify(_srvTemp)),observacoes:[],aguardandoClienteAcumuladoMs:0,aguardandoClienteInicio:null,encerramento:null,
+    checklistObrigatorio:itens.length>0,checklistInicio:itens.map(texto=>({texto,marcado:false,usuario:"",data:""})),slaInicio:itens.length?null:agr,
+    historico:[{acao:`Ticket criado em ${_modInfo(_moduloAtual).nome}`+(itens.length?" — SLA aguardando checklist":""),usuario:usuarioLogado.nome,data:agr,tipo:"sistema"}]};
+  tickets.unshift(ticket);await salvarTicket(ticket);_srvTemp=[];
+  _irInicio(`Ticket #${ticket.id} criado.`);
+};
+
+/* ---------------- Ticket aberto: checklist + restrições ---------------- */
+function _ckStatus(it){return it&&(it.status||(it.marcado?"aprovado":"pendente"));}
+function _ckItens(t){return(t&&t.checklistInicio)||[];}
+function _ticketFechado(t){return["Concluído","Encerrado","Cancelado"].includes(t.status);}
+function _ticketTemRecusa(t){return _ckItens(t).some(i=>_ckStatus(i)==="recusado");}
+function _podeCorrigir(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||_isTicketMeu(t)||_pode("alterar",_modTicket(t)));}
+function _ordinal(n){return n+"ª";}
+const CK_ST={
+  pendente:{cor:"#6c757d",bg:"#f1f3f5",txt:"Pendente"},
+  aprovado:{cor:"#1cc88a",bg:"#e8f8f1",txt:"✔ Aprovado"},
+  recusado:{cor:"#e74a3b",bg:"#fdecea",txt:"✖ Recusado"},
+  corrigido:{cor:"#4e73df",bg:"#e8f0ff",txt:"🔁 Corrigido — reanalisar"}
+};
+function _renderChecklist(t){
+  if(!t.checklistObrigatorio)return"";
+  const itens=_ckItens(t);const aprov=itens.filter(i=>_ckStatus(i)==="aprovado").length;
+  const nRec=itens.filter(i=>_ckStatus(i)==="recusado").length,nCor=itens.filter(i=>_ckStatus(i)==="corrigido").length;
+  const ok=!!t.slaInicio;const pode=_pode("checklist",_modTicket(t));const podeCor=_podeCorrigir(t);
+  const isAdm=usuarioLogado.perfil==="adm";
+  return`<div class="ck-box ${ok?"ok":""}" ${nRec&&!ok?'style="border-color:#e74a3b;"':""}>
+    <div class="ck-top">
+      <b style="font-size:14px;">☑️ Checklist de início</b>
+      <span style="display:flex;gap:4px;flex-wrap:wrap;">
+      ${ok?`<span class="badge" style="background:#1cc88a;color:white;">✅ Concluído — SLA contando desde ${formatarData(t.slaInicio)}</span>`
+          :`<span class="badge" style="background:#6c757d;color:white;">⏸ SLA pausado — ${aprov}/${itens.length} aprovados</span>`}
+      ${nRec&&!ok?`<span class="badge" style="background:#e74a3b;color:white;">✖ ${nRec} recusado(s)</span>`:""}
+      ${nCor&&!ok?`<span class="badge" style="background:#4e73df;color:white;">🔁 ${nCor} para reanalisar</span>`:""}
+      </span>
+    </div>
+    <div class="ck-prog"><div style="width:${itens.length?Math.round(aprov/itens.length*100):0}%;"></div></div>
+    ${itens.map((it,i)=>{const st=_ckStatus(it),c=CK_ST[st]||CK_ST.pendente;const rec=it.recusas||0;
+      let detalhe="";
+      if(st==="aprovado")detalhe=`<div class="ck-quem">✔ Aprovado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div>`;
+      if(st==="recusado")detalhe=`<div class="ck-motivo" style="border-color:#e74a3b;background:#fdecea;color:#842029;"><b>Motivo:</b> ${escHtml(it.motivo||"")}<div class="ck-quem">Recusado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div></div>`;
+      if(st==="corrigido")detalhe=`<div class="ck-motivo" style="border-color:#4e73df;background:#e8f0ff;color:#1e3a8a;">Último motivo: <i>${escHtml(it.motivo||"")}</i>${it.obsCorrecao?`<br><b>Correção:</b> ${escHtml(it.obsCorrecao)}`:""}<div class="ck-quem">Corrigido por ${escHtml(it.corrigidoPor||"")} — ${formatarData(it.corrigidoEm)}${it.emailEnviadoPara?` · reenviado para ${escHtml(it.emailEnviadoPara)}`:""}</div></div>`;
+      const btns=[];
+      if(!ok&&pode&&st!=="aprovado")btns.push(`<button class="btn-success" onclick="aprovarItemChecklist('${t.id}',${i})">✔ Aprovar</button>`);
+      if(!ok&&pode&&st!=="recusado"&&st!=="aprovado")btns.push(`<button class="btn-danger" onclick="abrirRecusarItem('${t.id}',${i})">✖ Recusar</button>`);
+      if(!ok&&podeCor&&st==="recusado")btns.push(`<button class="btn-primary" onclick="abrirCorrigirItem('${t.id}',${i})">✅ Corrigido</button>`);
+      if(!ok&&pode&&st==="aprovado")btns.push(`<button class="btn-dark" style="font-size:10px;padding:3px 7px;" onclick="desfazerItemChecklist('${t.id}',${i})">↩ desfazer</button>`);
+      return`<div class="ck-item">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="font-weight:600;">${escHtml(it.texto)}</span>
+            <span class="badge" style="background:${c.bg};color:${c.cor};border:1px solid ${c.cor};">${c.txt}</span>
+            ${rec?`<span class="badge" style="background:#fff3cd;color:#856404;" title="Quantas vezes este documento foi recusado">🔁 ${rec} devolução(ões)</span>`:""}
+          </div>${detalhe}
+        </div>
+        <div class="ck-btns">${btns.join("")}</div>
+      </div>`;}).join("")}
+    ${!ok?`<div style="font-size:11px;color:#6c757d;margin-top:6px;">O SLA começa quando todos os itens estiverem aprovados. Até lá, os serviços não podem ser iniciados, assinados ou finalizados.${pode?"":" Seu perfil não pode aprovar ou recusar itens."}</div>`:""}
+    ${ok&&isAdm?`<div style="margin-top:8px;"><button class="btn-dark" style="font-size:11px;" onclick="reabrirChecklist('${t.id}')">↩ Reabrir checklist (ADM)</button></div>`:""}
+  </div>`;
+}
+function _aplicarRestricoesSrv(t){
+  const wrap=document.getElementById("tabelaSrvWrap");if(!wrap||!t)return;
+  const mod=_modTicket(t);
+  if(!_pode("servicos",mod)){
+    wrap.querySelectorAll("input[type=checkbox]").forEach(c=>{c.disabled=true;c.title="Sem permissão para gerenciar serviços";});
+    wrap.querySelectorAll('button[onclick^="removerSrvTicket"],button[onclick^="abrirModalAtualizacaoServico"]').forEach(b=>b.style.display="none");
+  }
+  if(_checklistPendente(t)){
+    wrap.querySelectorAll('input[id^="chk_ini_"],input[id^="chk_ass_"],input[id^="chk_fin_"]').forEach(c=>{if(!c.checked){c.disabled=true;c.title="Conclua o checklist de início primeiro";}});
+  }
+}
+function _posProcessarTicket(t){
+  const mod=_modTicket(t);const cont=document.getElementById("conteudo");if(!cont)return;
+  /* checklist antes do bloco de serviços */
+  const wrap=document.getElementById("tabelaSrvWrap");
+  const bloco=wrap?wrap.closest('[style*="grid-column"]'):null;
+  if(bloco&&t.checklistObrigatorio){const d=document.createElement("div");d.id="checklistBox";d.style.gridColumn="1/-1";d.innerHTML=_renderChecklist(t);bloco.parentNode.insertBefore(d,bloco);}
+  const esconder=sel=>cont.querySelectorAll(sel).forEach(b=>b.style.display="none");
+  const podeAlterar=_pode("alterar",mod),podeSrv=_pode("servicos",mod);
+  if(!podeAlterar){
+    ["vt_cliente","vt_titulo","vt_cnpj","vt_responsavel","vt_prioridade","vt_status","vt_notif_email"].forEach(id=>{const el=document.getElementById(id);if(el)el.disabled=true;});
+    esconder('button[onclick^="atualizarTicket"],button[onclick^="prepararAguardandoCliente"],button[onclick^="abrirModalRetomarAndamento"]');
+    const info=document.getElementById("vt_info_adicionais");if(info){const c=info.closest(".card");if(c)c.style.display="none";}
+  }
+  if(!podeSrv){const sel=document.getElementById("vt_srv_sel");if(sel&&sel.parentElement)sel.parentElement.style.display="none";}
+  if(!_pode("transferir",mod))esconder('button[onclick^="abrirModalTransf"]');
+  if(!_pode("encerrar",mod))esconder('button[onclick^="abrirModalEncerrarTicket"]');
+  if(!_pode("ver",mod))cont.querySelectorAll('button[onclick="mostrarTickets()"]').forEach(b=>b.setAttribute("onclick","_irInicio()"));
+  _aplicarRestricoesSrv(t);
+  /* módulo do ticket + mover (ADM) */
+  const h2=cont.querySelector("h2");const m=_modInfo(mod);
+  if(h2)h2.insertAdjacentHTML("afterend",`<span class="mod-pill" style="background:${m.cor};font-size:11px;padding:3px 10px;">${m.icone} ${m.nome}</span>`);
+  if(usuarioLogado.perfil==="adm"){const acoes=cont.querySelector(".ticket-actions");const outro=MODULOS.find(x=>x.id!==mod);
+    if(acoes&&outro)acoes.insertAdjacentHTML("beforeend",`<button class="btn-dark" onclick="moverTicketModulo('${t.id}','${outro.id}')">↔ Mover para ${outro.nome}</button>`);}
+  if(!podeAlterar&&!podeSrv){const acoes=cont.querySelector(".ticket-actions");if(acoes)acoes.insertAdjacentHTML("afterbegin",`<span class="mod-ro">👁 Somente leitura</span>`);}
+}
+const _verTicketOrig=window.verTicket;
+window.verTicket=function(id,_rt){
+  if(!usuarioLogado)return;
+  const t=tickets.find(x=>x.id===id);
+  if(t&&!_pode("ver",_modTicket(t))&&!_isTicketMeu(t)){_negar("ver tickets");_irInicio();return;}
+  const r=_verTicketOrig.apply(this,arguments);
+  if(t)try{_posProcessarTicket(t);}catch(e){console.error(e);}
+  return r;
+};
+const _refreshSrvOrig=window.refreshTabelaSrv;
+window.refreshTabelaSrv=function(idx){_refreshSrvOrig.apply(this,arguments);try{_aplicarRestricoesSrv(tickets[idx]);}catch(e){}};
+
+function _ckEvento(it,acao,texto){if(!it.eventos)it.eventos=[];it.eventos.push({acao,texto:texto||"",usuario:usuarioLogado.nome,data:agora()});}
+function _ckAlvo(id,i){const idx=tickets.findIndex(t=>t.id===id);if(idx<0)return null;const t=tickets[idx];const it=_ckItens(t)[i];if(!it)return null;return{idx,t,it};}
+async function _ckSalvar(a){a.t.ultimaAtualizacao=agora();await salvarTicket(a.t);_ckRecarregar(a.t.id);}
+function _ckRecarregar(id){if(_telaAtual==="ticket"&&_ticketAbertoId===id)verTicket(id);else if(_telaAtual==="docrecusada")mostrarDocRecusada();}
+window.aprovarItemChecklist=async function(id,i){
+  const a=_ckAlvo(id,i);if(!a)return;
+  if(!_pode("checklist",_modTicket(a.t))){_negar("aprovar checklist");return;}
+  if(a.t.slaInicio)return;
+  const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckStatus(x)==="aprovado");
+  if(vaiConcluir&&!confirm("Este é o último item. Ao aprovar, o checklist fica concluído e o SLA dos serviços começa a contar agora. Confirmar?"))return;
+  const agr=agora();Object.assign(a.it,{status:"aprovado",marcado:true,usuario:usuarioLogado.nome,data:agr});
+  _ckEvento(a.it,"aprovado");
+  _logHistorico(a.idx,`Checklist: "${a.it.texto}" APROVADO${a.it.recusas?` (após ${a.it.recusas} devolução(ões))`:""}`);
+  if(vaiConcluir){a.t.slaInicio=agr;a.t.checklistConcluidoPor=usuarioLogado.nome;_logHistorico(a.idx,"✅ Checklist de início concluído — SLA dos serviços começou a contar");}
+  await _ckSalvar(a);
+};
+window.desfazerItemChecklist=async function(id,i){
+  const a=_ckAlvo(id,i);if(!a||a.t.slaInicio)return;
+  if(!_pode("checklist",_modTicket(a.t))){_negar("alterar checklist");return;}
+  Object.assign(a.it,{status:a.it.recusas?"corrigido":"pendente",marcado:false,usuario:"",data:""});
+  _ckEvento(a.it,"aprovação desfeita");_logHistorico(a.idx,`Checklist: aprovação de "${a.it.texto}" desfeita`);
+  await _ckSalvar(a);
+};
+let _pendCk={id:null,i:null};
+window.abrirRecusarItem=function(id,i){
+  const a=_ckAlvo(id,i);if(!a)return;
+  if(!_pode("checklist",_modTicket(a.t))){_negar("recusar checklist");return;}
+  _pendCk={id,i};
+  document.getElementById("modalRecusarDocInfo").innerHTML=`Ticket #${escHtml(id)} — <b>${escHtml(a.t.cliente||"")}</b><br>Item: <b>${escHtml(a.it.texto)}</b>${a.it.recusas?`<br><span style="color:#856404;">Já foi recusado ${a.it.recusas}x.</span>`:""}`;
+  document.getElementById("modalRecusarDocMotivo").value="";
+  document.getElementById("modalRecusarDoc").style.display="flex";
+  setTimeout(()=>document.getElementById("modalRecusarDocMotivo").focus(),50);
+};
+window.confirmarRecusaDoc=async function(){
+  const motivo=(document.getElementById("modalRecusarDocMotivo").value||"").trim();
+  if(!motivo){alert("Descreva o motivo da recusa (ex.: contrato social não legível).");return;}
+  const a=_ckAlvo(_pendCk.id,_pendCk.i);fecharModal("modalRecusarDoc");if(!a)return;
+  const agr=agora();a.it.recusas=(a.it.recusas||0)+1;
+  Object.assign(a.it,{status:"recusado",marcado:false,motivo,usuario:usuarioLogado.nome,data:agr,obsCorrecao:"",emailEnviadoPara:""});
+  _ckEvento(a.it,"recusado",motivo);
+  _logHistorico(a.idx,`⛔ Checklist: "${a.it.texto}" RECUSADO (${_ordinal(a.it.recusas)} devolução) — Motivo: "${motivo}"`,"doc_recusada");
+  _pendCk={id:null,i:null};await _ckSalvar(a);
+};
+window.abrirCorrigirItem=function(id,i){
+  const a=_ckAlvo(id,i);if(!a)return;
+  if(!_podeCorrigir(a.t)){_negar("corrigir documentação");return;}
+  _pendCk={id,i};const mod=_modTicket(a.t);const em=emailCredenciamento[mod]||"";
+  document.getElementById("modalCorrigidoDocInfo").innerHTML=`Ticket #${escHtml(id)} — <b>${escHtml(a.t.cliente||"")}</b><br>Item: <b>${escHtml(a.it.texto)}</b><div style="margin-top:8px;background:#fdecea;border:1px solid #e74a3b;border-radius:6px;padding:8px 10px;color:#842029;"><b>Motivo da recusa:</b> ${escHtml(a.it.motivo||"")}</div>`;
+  document.getElementById("modalCorrigidoDocObs").value="";
+  const chk=document.getElementById("modalCorrigidoDocEmail");chk.checked=!!em;chk.disabled=!em;
+  document.getElementById("modalCorrigidoDocEmailInfo").innerHTML=em?`Abrir e-mail para <b>${escHtml(em)}</b> para reenviar o documento (anexe o arquivo corrigido no e-mail).`:`<span style="color:#e74a3b;">⚠ E-mail do credenciamento não cadastrado para ${_modInfo(mod).nome}. Cadastre em Cadastros → Checklist.</span>`;
+  document.getElementById("modalCorrigidoDoc").style.display="flex";
+};
+window.confirmarCorrigidoDoc=async function(){
+  const obs=(document.getElementById("modalCorrigidoDocObs").value||"").trim();
+  const enviar=document.getElementById("modalCorrigidoDocEmail").checked;
+  const a=_ckAlvo(_pendCk.id,_pendCk.i);fecharModal("modalCorrigidoDoc");if(!a)return;
+  const em=emailCredenciamento[_modTicket(a.t)]||"";const agr=agora();
+  Object.assign(a.it,{status:"corrigido",marcado:false,obsCorrecao:obs,corrigidoPor:usuarioLogado.nome,corrigidoEm:agr,emailEnviadoPara:enviar&&em?em:""});
+  _ckEvento(a.it,"corrigido",obs+(enviar&&em?` [reenviado para ${em}]`:""));
+  _logHistorico(a.idx,`🔁 Checklist: "${a.it.texto}" CORRIGIDO (após ${_ordinal(a.it.recusas||1)} devolução)${obs?` — "${obs}"`:""}${enviar&&em?` — reenviado por e-mail para ${em}`:" — sem e-mail"}`,"doc_corrigida");
+  if(enviar&&em){
+    const assunto=encodeURIComponent(`[CRM] Documentação corrigida — Ticket #${a.t.id} — ${a.t.cliente||""}`);
+    const corpo=encodeURIComponent(`Olá, credenciamento.\n\nSegue o documento corrigido.\n\nTicket: #${a.t.id}\nCliente: ${a.t.cliente||""}${a.t.cnpj?` (${a.t.cnpj})`:""}\nItem: ${a.it.texto}\nMotivo da recusa: ${a.it.motivo||""}\nCorreção: ${obs||"-"}\nDevoluções até agora: ${a.it.recusas||1}\n\n${usuarioLogado.nome}`);
+    window.open(`mailto:${em}?subject=${assunto}&body=${corpo}`,"_blank");
+  }
+  _pendCk={id:null,i:null};await _ckSalvar(a);
+};
+window.reabrirChecklist=async function(id){
+  if(usuarioLogado.perfil!=="adm")return;
+  const idx=tickets.findIndex(t=>t.id===id);if(idx<0)return;const t=tickets[idx];
+  if(!confirm("Reabrir o checklist volta todos os itens para Pendente e PAUSA o SLA. Ele volta a contar do zero quando todos forem aprovados de novo. O histórico de devoluções é mantido. Continuar?"))return;
+  _ckItens(t).forEach(x=>{Object.assign(x,{status:"pendente",marcado:false,usuario:"",data:""});_ckEvento(x,"checklist reaberto");});
+  t.slaInicio=null;_logHistorico(idx,"↩ Checklist de início reaberto pelo ADM — SLA pausado");
+  t.ultimaAtualizacao=agora();await salvarTicket(t);verTicket(id);
+};
+
+/* ---------------- DOCUMENTAÇÃO RECUSADA ---------------- */
+_injetar("modalRecusarDoc",`<div id="modalRecusarDoc" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>✖ Recusar documento</h3><p id="modalRecusarDocInfo" style="font-size:13px;color:#555;"></p><label style="display:block;margin-top:6px;"><b>Motivo da recusa *</b></label><textarea id="modalRecusarDocMotivo" rows="3" maxlength="500" style="margin:6px 0 14px;resize:vertical;" placeholder="Ex.: contrato social não está legível"></textarea><div style="display:flex;gap:8px;"><button class="btn-danger" onclick="confirmarRecusaDoc()">Recusar documento</button><button class="btn-dark" onclick="fecharModal('modalRecusarDoc')">Cancelar</button></div></div></div>`);
+_injetar("modalCorrigidoDoc",`<div id="modalCorrigidoDoc" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>✅ Marcar como corrigido</h3><div id="modalCorrigidoDocInfo" style="font-size:13px;color:#555;margin-bottom:10px;"></div><label style="display:block;"><b>O que foi corrigido</b> <span style="font-size:11px;color:#888;">(opcional)</span></label><textarea id="modalCorrigidoDocObs" rows="2" maxlength="500" style="margin:6px 0 10px;resize:vertical;" placeholder="Ex.: enviado novo contrato social digitalizado"></textarea><label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:14px;cursor:pointer;"><input type="checkbox" id="modalCorrigidoDocEmail" style="margin-top:1px;flex-shrink:0;"><span id="modalCorrigidoDocEmailInfo"></span></label><div style="display:flex;gap:8px;"><button class="btn-primary" onclick="confirmarCorrigidoDoc()">Marcar como corrigido</button><button class="btn-dark" onclick="fecharModal('modalCorrigidoDoc')">Cancelar</button></div></div></div>`);
+
+/* Tickets do módulo atual que o usuário deve acompanhar: ADM vê todos; os demais veem
+   os do seu setor e os que abriram / são donos (mesmo que o ticket já esteja em outro setor). */
+function _ticketsDoUsuarioNoModulo(){
+  const doMod=tickets.filter(_ticketNoModulo);
+  if(usuarioLogado.perfil==="adm")return doMod;
+  const vis=new Set(ticketsVisiveis().map(t=>t.id));
+  return doMod.filter(t=>vis.has(t.id)||_isTicketMeu(t));
+}
+function _docRecusadaTickets(){return _ticketsDoUsuarioNoModulo().filter(t=>!_ticketFechado(t)&&_ticketTemRecusa(t));}
+function _injetarCardDocRecusada(){
+  const cont=document.getElementById("conteudo");if(!cont||!usuarioLogado)return;
+  const old=document.getElementById("cardDocRecusada");if(old)old.remove();
+  const lista=_docRecusadaTickets();const nItens=lista.reduce((s,t)=>s+_ckItens(t).filter(i=>_ckStatus(i)==="recusado").length,0);
+  const ativo=lista.length>0;
+  const html=`<div id="cardDocRecusada" class="doc-rec-card ${ativo?"ativo":""}" onclick="mostrarDocRecusada()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarDocRecusada()">
+    <div class="doc-rec-num">${lista.length}</div>
+    <div style="flex:1;min-width:0;"><div class="doc-rec-tit">DOCUMENTAÇÃO RECUSADA</div>
+    <div class="doc-rec-sub">${ativo?`${lista.length} cliente(s) com ${nItens} documento(s) para corrigir`:"Nenhum documento para corrigir"}</div></div>
+    <span class="doc-rec-abrir">Abrir</span></div>`;
+  const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
+  if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
+}
+const _filtrarOrig=window.filtrarTickets;
+window.filtrarTickets=function(){const r=_filtrarOrig.apply(this,arguments);try{if(_telaAtual==="tickets")_injetarCardDocRecusada();}catch(e){}return r;};
+
+window.mostrarDocRecusada=function(){
+  if(!usuarioLogado)return;
+  if(document.querySelector("#conteudo .doc-rec-tela textarea:focus,#conteudo .doc-rec-tela input:focus"))return;
+  const verHist=_telaAtual==="docrecusada"&&!!document.getElementById("docRecHist")?.dataset.aberto;
+  _telaAtual="docrecusada";_ticketAbertoId=null;
+  const m=_modInfo(_moduloAtual);
+  const lista=_docRecusadaTickets().sort((a,b)=>{const d=x=>Math.min(..._ckItens(x).filter(i=>_ckStatus(i)==="recusado").map(i=>new Date(i.data).getTime()||0));return d(a)-d(b);});
+  const meus=_ticketsDoUsuarioNoModulo();
+  const aguardando=meus.filter(t=>!_ticketFechado(t)&&!t.slaInicio&&_ckItens(t).some(i=>_ckStatus(i)==="corrigido"));
+  const hist=meus.filter(t=>_ckItens(t).some(i=>(i.recusas||0)>0)).sort((a,b)=>_ckItens(b).reduce((s,i)=>s+(i.recusas||0),0)-_ckItens(a).reduce((s,i)=>s+(i.recusas||0),0));
+  const podeAbrir=t=>_pode("ver",_modTicket(t))||_isTicketMeu(t);
+  const srvsTxt=t=>(t.servicosTicket||[]).map(s=>escHtml(s.nome)).join(", ")||"<i>sem serviços</i>";
+  const cabTicket=t=>`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;flex-wrap:wrap;">
+      <div><span style="font-size:11px;color:#aaa;">#${t.id}</span> <b style="font-size:15px;">${escHtml(t.cliente||"")}</b>${t.cnpj?` <span style="font-size:11px;color:#888;">📄 ${escHtml(t.cnpj)}</span>`:""}
+      <div style="font-size:12px;color:#666;margin-top:2px;">🧩 Serviços: ${srvsTxt(t)}</div>
+      <div style="font-size:11px;color:#999;">Aberto por ${escHtml(t.abertoPor||"")} · Setor ${escHtml(t.setor||"")}</div></div>
+      ${podeAbrir(t)?`<button class="btn-dark" onclick="verTicket('${t.id}')">Abrir ticket</button>`:""}</div>`;
+  document.getElementById("conteudo").innerHTML=`<div class="doc-rec-tela" style="max-width:860px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn-dark" onclick="_irInicio()">← Voltar</button>
+      <h2 style="margin:0;">⛔ Documentação recusada</h2>
+      <span style="font-size:13px;color:#888;">${m.icone} ${m.nome} · ${lista.length} cliente(s)</span>
+    </div>
+    ${lista.length?lista.map(t=>`<div class="card" style="border-left-color:#e74a3b;">
+      ${cabTicket(t)}
+      ${_ckItens(t).map((it,i)=>_ckStatus(it)!=="recusado"?"":`<div class="doc-rec-item">
+        <div style="flex:1;min-width:0;">
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;"><b>${escHtml(it.texto)}</b>${(it.recusas||0)>1?`<span class="badge" style="background:#fff3cd;color:#856404;">🔁 recusado ${it.recusas}x</span>`:""}</div>
+          <div style="color:#842029;margin-top:3px;"><b>Motivo:</b> ${escHtml(it.motivo||"")}</div>
+          <div class="ck-quem">Recusado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div>
+        </div>
+        ${_podeCorrigir(t)?`<button class="btn-primary" style="padding:8px 14px;" onclick="abrirCorrigirItem('${t.id}',${i})">✅ Corrigido</button>`:`<span style="font-size:11px;color:#888;">Sem permissão para corrigir</span>`}
+      </div>`).join("")}
+    </div>`).join(""):`<div class="card" style="text-align:center;padding:40px 20px;color:#666;"><div style="font-size:40px;">🎉</div><b>Nenhum documento recusado.</b><div style="font-size:13px;margin-top:4px;">Quando o credenciamento recusar um item do checklist, ele aparece aqui.</div></div>`}
+    ${aguardando.length?`<h3 style="margin:22px 0 8px;">🔁 Corrigidos — aguardando reanálise do credenciamento</h3>
+      ${aguardando.map(t=>`<div class="card" style="border-left-color:#4e73df;padding:12px 16px;">${cabTicket(t)}
+        ${_ckItens(t).filter(i=>_ckStatus(i)==="corrigido").map(it=>`<div style="font-size:12px;margin-top:6px;">• <b>${escHtml(it.texto)}</b> — corrigido por ${escHtml(it.corrigidoPor||"")} em ${formatarData(it.corrigidoEm)}${it.emailEnviadoPara?` · e-mail para ${escHtml(it.emailEnviadoPara)}`:""}</div>`).join("")}</div>`).join("")}`:""}
+    <div class="card" style="border-left-color:#856404;margin-top:22px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+        <h3 style="margin:0;">📜 Histórico de idas e voltas</h3>
+        <button class="btn-warning" onclick="(function(b){const h=document.getElementById('docRecHist');const v=!h.dataset.aberto;h.dataset.aberto=v?'1':'';h.style.display=v?'block':'none';b.textContent=v?'Ocultar':'Mostrar (${hist.length} cliente(s))';})(this)">${verHist?"Ocultar":`Mostrar (${hist.length} cliente(s))`}</button>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:4px;">Todos os documentos que já foram recusados alguma vez, com quantas vezes foram e voltaram.</div>
+      <div id="docRecHist" data-aberto="${verHist?"1":""}" style="display:${verHist?"block":"none"};margin-top:10px;overflow-x:auto;">
+        ${hist.length?`<table class="srv-table"><tr><th>Ticket / Cliente</th><th>Documento</th><th style="text-align:center;">Devoluções</th><th>Situação</th><th>Linha do tempo</th></tr>
+        ${hist.map(t=>_ckItens(t).filter(i=>(i.recusas||0)>0).map(it=>{const c=CK_ST[_ckStatus(it)]||CK_ST.pendente;return`<tr>
+          <td><span style="font-size:11px;color:#aaa;">#${t.id}</span><br><b>${escHtml(t.cliente||"")}</b></td>
+          <td>${escHtml(it.texto)}</td>
+          <td style="text-align:center;"><b style="font-size:16px;color:${it.recusas>1?"#e74a3b":"#856404"};">${it.recusas}</b></td>
+          <td><span class="badge" style="background:${c.bg};color:${c.cor};border:1px solid ${c.cor};">${c.txt}</span></td>
+          <td style="font-size:11px;line-height:1.5;">${(it.eventos||[]).map(e=>`<div><b>${escHtml(e.acao)}</b> — ${escHtml(e.usuario)} · ${formatarData(e.data)}${e.texto?`<br><span style="color:#666;">${escHtml(e.texto)}</span>`:""}</div>`).join("")}</td>
+        </tr>`;}).join("")).join("")}</table>`:`<p style="color:#999;font-size:13px;">Nenhum documento foi recusado até agora.</p>`}
+      </div>
+    </div>
+  </div>`;
+};
+
+window.moverTicketModulo=async function(id,destino){
+  if(usuarioLogado.perfil!=="adm")return;
+  const idx=tickets.findIndex(t=>t.id===id);if(idx<0)return;const t=tickets[idx];
+  const de=_modInfo(_modTicket(t)),para=_modInfo(destino);
+  if(!confirm(`Mover o ticket #${id} de ${de.nome} para ${para.nome}?`))return;
+  t.modulo=destino;_logHistorico(idx,`Ticket movido de ${de.nome} para ${para.nome}`);
+  t.ultimaAtualizacao=agora();await salvarTicket(t);
+  _moduloAtual=destino;_aplicarNav();verTicket(id);
+};
+
+/* ---------------- Guardas das ações do ticket ---------------- */
+function _guardAcao(nome,perm,rotulo,extra){
+  const orig=window[nome];if(typeof orig!=="function")return;
+  window[nome]=function(ticketId){
+    const t=tickets.find(x=>x.id===ticketId);
+    if(t&&!_pode(perm,_modTicket(t))){_negar(rotulo);if(_ticketAbertoId)verTicket(_ticketAbertoId);return;}
+    if(extra&&extra(t,arguments)===false)return;
+    return orig.apply(this,arguments);
+  };
+}
+const _bloqueioChecklist=(t,args)=>{
+  if(args[2]&&_checklistPendente(t)){alert("Conclua o checklist de início antes de iniciar, assinar ou finalizar serviços.");const idx=tickets.indexOf(t);if(idx>=0)refreshTabelaSrv(idx);return false;}
+};
+[["atualizarTicket","alterar","alterar ticket"],["aoMudarStatusTicket","alterar","alterar ticket"],["prepararAguardandoCliente","alterar","alterar ticket"],["abrirModalRetomarAndamento","alterar","alterar ticket"],["abrirModalInfoAdd","alterar","alterar ticket"],["toggleNotifEmail","alterar","alterar ticket"],
+ ["excluirTicket","excluir","excluir ticket"],["abrirModalTransf","transferir","transferir setor"],["abrirModalEncerrarTicket","encerrar","encerrar ticket"],
+ ["adicionarSrvTicket","servicos","gerenciar serviços"],["removerSrvTicket","servicos","gerenciar serviços"],["abrirModalAtualizacaoServico","servicos","gerenciar serviços"],["aoClicarExpirado","servicos","gerenciar serviços"]
+].forEach(([n,p,r])=>_guardAcao(n,p,r));
+[["aoClicarIniciado"],["aoClicarAssinatura"],["aoClicarFinalizado"]].forEach(([n])=>_guardAcao(n,"servicos","gerenciar serviços",_bloqueioChecklist));
+
+/* Lista: selo de checklist pendente */
+const _renderListaOrig=window.renderListaTickets;
+window.renderListaTickets=function(lista){
+  if(!lista||!lista.length)return _renderListaOrig.apply(this,arguments);
+  const marca='<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">';
+  return lista.map(t=>{let h=_renderListaOrig([t]);
+    if(_checklistPendente(t)&&!_ticketFechado(t)){const its=_ckItens(t);
+      const nR=its.filter(i=>_ckStatus(i)==="recusado").length,nC=its.filter(i=>_ckStatus(i)==="corrigido").length;
+      let b=`<span class="badge" style="background:#6c757d;color:white;">☑️ Checklist ${its.filter(i=>_ckStatus(i)==="aprovado").length}/${its.length} · SLA pausado</span>`;
+      if(nR)b+=`<span class="badge" style="background:#e74a3b;color:white;">⛔ Doc. recusada (${nR})</span>`;
+      if(nC)b+=`<span class="badge" style="background:#4e73df;color:white;">🔁 Doc. corrigida — reanalisar (${nC})</span>`;
+      h=h.replace(marca,marca+b);}
+    return h;}).join("");
+};
+
+/* ---------------- Cadastros: usuários com matriz de permissões ---------------- */
+function _renderMatriz(prefix,perms){
+  const p=perms||_permVazia();
+  return`<table class="perm-table"><thead><tr><th>Função</th>${MODULOS.map(m=>`<th style="color:${m.cor};">${m.icone} ${m.nome}<br><a onclick="_permTodos('${prefix}','${m.id}')">marcar/desmarcar todos</a></th>`).join("")}</tr></thead><tbody>
+    ${PERM_FUNCOES.map(f=>`<tr><td>${f.icone} ${f.label}${f.desc?`<div class="perm-desc">${f.desc}</div>`:""}</td>${MODULOS.map(m=>`<td><input type="checkbox" id="perm-${prefix}-${m.id}-${f.id}" ${p[m.id]&&p[m.id][f.id]?"checked":""} onchange="_permMudou('${prefix}')"></td>`).join("")}</tr>`).join("")}
+    <tr class="perm-sep"><td colspan="${MODULOS.length+1}">Geral (vale para os dois módulos)</td></tr>
+    ${PERM_GLOBAIS.map(g=>`<tr><td>${g.icone} ${g.label}${g.desc?`<div class="perm-desc">${g.desc}</div>`:""}</td><td colspan="${MODULOS.length}"><input type="checkbox" id="perm-${prefix}-g-${g.id}" ${p[g.id]?"checked":""} onchange="_permMudou('${prefix}')"></td></tr>`).join("")}
+  </tbody></table>`;
+}
+function _lerMatriz(prefix){
+  const p=_permVazia();
+  MODULOS.forEach(m=>PERM_FUNCOES.forEach(f=>{const c=document.getElementById(`perm-${prefix}-${m.id}-${f.id}`);p[m.id][f.id]=!!(c&&c.checked);}));
+  PERM_GLOBAIS.forEach(g=>{const c=document.getElementById(`perm-${prefix}-g-${g.id}`);p[g.id]=!!(c&&c.checked);});
+  return p;
+}
+function _preencherMatriz(prefix,perms){
+  MODULOS.forEach(m=>PERM_FUNCOES.forEach(f=>{const c=document.getElementById(`perm-${prefix}-${m.id}-${f.id}`);if(c)c.checked=!!(perms[m.id]&&perms[m.id][f.id]);}));
+  PERM_GLOBAIS.forEach(g=>{const c=document.getElementById(`perm-${prefix}-g-${g.id}`);if(c)c.checked=!!perms[g.id];});
+}
+window._permTodos=function(prefix,mod){
+  const cs=PERM_FUNCOES.map(f=>document.getElementById(`perm-${prefix}-${mod}-${f.id}`)).filter(Boolean);
+  const todos=cs.every(c=>c.checked);cs.forEach(c=>c.checked=!todos);_permMudou(prefix);
+};
+window._permMudou=function(prefix){const s=document.getElementById("permtpl-"+prefix);if(s)s.value="";};
+window._aplicarTemplate=function(prefix,nome){const tp=perfisAcesso.find(x=>x.nome===nome);if(!tp)return;_preencherMatriz(prefix,_permsDoUsuario({permissoes:tp.permissoes}));const s=document.getElementById("permtpl-"+prefix);if(s)s.value=nome;};
+function _blocoPermUsuario(prefix,u){
+  const isAdm=u&&u.perfil==="adm";
+  const perms=_permsDoUsuario(u||{permissoes:null});
+  const atual=u&&u.perfilAcesso&&perfisAcesso.some(x=>x.nome===u.perfilAcesso)?u.perfilAcesso:"";
+  return`<div class="perm-wrap" id="permwrap-${prefix}">
+    <div class="perm-adm" id="permadm-${prefix}" style="display:${isAdm?"block":"none"};">🔵 Perfil ADM tem acesso total aos dois módulos. Para limitar, mude o perfil para <b>Auxiliar</b>.</div>
+    <div id="permbody-${prefix}" style="display:${isAdm?"none":"block"};">
+      <div class="perm-head"><b>🔐 Acessos</b><span style="color:#888;">Perfil de acesso:</span>
+        <select id="permtpl-${prefix}" onchange="this.value?_aplicarTemplate('${prefix}',this.value):null"><option value="">Personalizado</option>${perfisAcesso.map(x=>`<option ${x.nome===atual?"selected":""}>${escHtml(x.nome)}</option>`).join("")}</select>
+      </div>
+      ${_renderMatriz(prefix,perms)}
+    </div>
+  </div>`;
+}
+function _ligarPerfilSelect(selId,prefix){
+  const s=document.getElementById(selId);if(!s)return;
+  s.addEventListener("change",()=>{const adm=s.value==="adm";const a=document.getElementById("permadm-"+prefix),b=document.getElementById("permbody-"+prefix);if(a)a.style.display=adm?"block":"none";if(b)b.style.display=adm?"none":"block";});
+}
+const _abaUsuariosOrig=window.abaUsuarios;
+window.abaUsuarios=function(){
+  _abaUsuariosOrig.apply(this,arguments);
+  const box=document.getElementById("abaConteudo");if(!box)return;
+  const info=box.querySelector("div");if(info&&info.textContent.includes("Perfis:"))info.innerHTML=`<b>📋 Perfis:</b> 🔵 <b>ADM</b> — acesso total &nbsp;|&nbsp; ⚪ <b>Auxiliar</b> — acessa só o que estiver marcado na tabela de acessos (por módulo). Modelos prontos em <b>🔐 Perfis de Acesso</b>.`;
+  const bAdd=box.querySelector('button[onclick="addUsuario()"]');
+  const ns0=document.getElementById("novoUserSenha");if(ns0){ns0.placeholder="Senha provisória";const lb=ns0.previousElementSibling;if(lb)lb.textContent="Senha provisória *";}
+  if(bAdd){bAdd.insertAdjacentHTML("beforebegin",_blocoPermUsuario("novo",{perfil:"auxiliar",permissoes:_permVazia()}));_ligarPerfilSelect("novoUserPerfil","novo");}
+  usuarios.forEach((u,i)=>{const b=box.querySelector(`button[onclick="salvarEdicaoUsuario(${i})"]`);if(!b)return;
+    b.parentElement.insertAdjacentHTML("beforebegin",_blocoPermUsuario("u"+i,u));_ligarPerfilSelect("eu-perfil-"+i,"u"+i);
+    const proprio=usuarioLogado&&u._id===usuarioLogado._id;
+    b.insertAdjacentHTML("afterend",proprio?"":`<button class="btn-warning" onclick="abrirResetSenha(${i})">🔑 Resetar senha</button>`);
+    b.parentElement.insertAdjacentHTML("beforeend",u.trocarSenha?`<span class="senha-pend">🔑 Aguardando o usuário criar a nova senha${u.senhaResetadaEm?` · senha provisória definida em ${formatarData(u.senhaResetadaEm)}${u.senhaResetadaPor?` por ${escHtml(u.senhaResetadaPor)}`:""}`:""}</span>`
+      :(u.senhaAlteradaEm?`<span class="senha-ok">Senha criada pelo usuário em ${formatarData(u.senhaAlteradaEm)}</span>`:""));
+    const ns=document.getElementById("eu-senha-"+i);if(ns&&!proprio)ns.placeholder="nova provisória";const lb=ns.previousElementSibling;if(lb)lb.textContent="Nova senha provisória";
+    const badge=b.closest('div[style*="border:1px solid #e3e6f0"]')?.querySelector(".perfil-badge-auxiliar");
+    if(badge&&u.perfilAcesso)badge.textContent=u.perfilAcesso;});
+};
+window.salvarUsuario=async function(u){try{
+  const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||"",totpSecret:u.totpSecret||"",permissoes:u.permissoes||null,perfilAcesso:u.perfilAcesso||"",trocarSenha:!!u.trocarSenha,senhaAlteradaEm:u.senhaAlteradaEm||"",senhaResetadaEm:u.senhaResetadaEm||"",senhaResetadaPor:u.senhaResetadaPor||""};
+  if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}
+}catch(e){console.error(e);}};
+window.addUsuario=async function(){
+  const n=document.getElementById("novoUserNome").value.trim(),p=document.getElementById("novoUserPerfil").value,s=document.getElementById("novoUserSetor").value,se=document.getElementById("novoUserSenha").value,em=(document.getElementById("novoUserEmail")?.value||"").trim();
+  if(!n){alert("Informe o nome.");return;}
+  if(usuarios.some(u=>(u.nome||"").trim().toLowerCase()===n.toLowerCase())){alert("Já existe um usuário com esse nome.");return;}
+  if(!se){alert("Informe uma senha provisória. O usuário vai criar a senha dele no primeiro acesso.");return;}
+  const novo={nome:n,perfil:p,setor:s,senha:se,email:em,trocarSenha:true,senhaResetadaEm:agora(),senhaResetadaPor:usuarioLogado.nome,permissoes:_lerMatriz("novo"),perfilAcesso:document.getElementById("permtpl-novo")?.value||""};
+  usuarios.push(novo);await salvarUsuario(novo);abaUsuarios();
+};
+window.salvarEdicaoUsuario=async function(i){
+  const n=document.getElementById("eu-nome-"+i).value.trim(),p=document.getElementById("eu-perfil-"+i).value,s=document.getElementById("eu-setor-"+i).value,ns=document.getElementById("eu-senha-"+i).value,em=(document.getElementById("eu-email-"+i)?.value||"").trim();
+  if(!n){alert("Nome vazio.");return;}
+  const u=usuarios[i];u.nome=n;u.perfil=p;u.setor=s;u.email=em;
+  if(ns!==""){u.senha=ns;if(!(usuarioLogado&&u._id===usuarioLogado._id)){u.trocarSenha=true;u.senhaResetadaEm=agora();u.senhaResetadaPor=usuarioLogado.nome;}}
+  u.permissoes=_lerMatriz("u"+i);u.perfilAcesso=document.getElementById("permtpl-u"+i)?.value||"";
+  await salvarUsuario(u);alert("Usuário salvo!");
+  if(usuarioLogado&&u._id&&u._id===usuarioLogado._id){usuarioLogado=u;_aplicarNav();}
+};
+
+/* ---------------- Cadastros: modelos de perfil ---------------- */
+window.abaPerfisAcesso=function(){
+  document.getElementById("abaConteudo").innerHTML=`<h3>🔐 Perfis de Acesso</h3>
+    <div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1f2937;">Modelos de acesso para aplicar nos usuários (em <b>Usuários</b>, escolha o perfil e ajuste se precisar). Ao salvar um modelo, você pode atualizar também os usuários que já usam ele.</div>
+    ${perfisAcesso.map((tp,j)=>`<div style="border:1px solid #e3e6f0;border-radius:8px;padding:12px;margin-bottom:12px;background:white;">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;"><input id="tpl-nome-${j}" value="${escHtml(tp.nome)}" style="flex:1;min-width:180px;font-weight:600;">
+      <button class="btn-info" onclick="salvarTemplate(${j})">💾 Salvar</button><button class="btn-danger" onclick="excluirTemplate(${j})">Excluir</button></div>
+      <div class="perm-wrap">${_renderMatriz("tpl"+j,_permsDoUsuario({permissoes:tp.permissoes}))}</div>
+      <div style="font-size:11px;color:#888;margin-top:6px;">${usuarios.filter(u=>u.perfilAcesso===tp.nome&&u.perfil!=="adm").length} usuário(s) com este perfil</div>
+    </div>`).join("")}
+    <div style="border:2px dashed #d0d9f0;border-radius:8px;padding:12px;background:#f4f6fb;">
+      <b style="font-size:13px;">Novo perfil</b>
+      <input id="tpl-nome-novo" placeholder="Ex.: Supervisor Revenda" style="margin-top:6px;">
+      <div class="perm-wrap">${_renderMatriz("tplnovo",_permVazia())}</div>
+      <button class="btn-success" style="margin-top:10px;" onclick="salvarTemplate('novo')">+ Criar perfil</button>
+    </div>`;
+};
+window.salvarTemplate=async function(j){
+  const nome=(document.getElementById("tpl-nome-"+j)?.value||"").trim();if(!nome){alert("Informe o nome do perfil.");return;}
+  if(perfisAcesso.some((x,k)=>x.nome.toLowerCase()===nome.toLowerCase()&&k!==j)){alert("Já existe um perfil com esse nome.");return;}
+  const permissoes=_lerMatriz(j==="novo"?"tplnovo":"tpl"+j);
+  if(j==="novo"){perfisAcesso.push({nome,permissoes});await _salvarConfigAcesso();abaPerfisAcesso();return;}
+  const antigo=perfisAcesso[j].nome;perfisAcesso[j]={nome,permissoes};await _salvarConfigAcesso();
+  const afetados=usuarios.filter(u=>u.perfilAcesso===antigo&&u.perfil!=="adm");
+  if(afetados.length&&confirm(`Atualizar também os acessos dos ${afetados.length} usuário(s) com o perfil "${antigo}"?`)){
+    for(const u of afetados){u.permissoes=permissoes;u.perfilAcesso=nome;await salvarUsuario(u);}
+  }else if(antigo!==nome){for(const u of afetados){u.perfilAcesso="";await salvarUsuario(u);}}
+  abaPerfisAcesso();
+};
+window.excluirTemplate=async function(j){
+  if(!confirm(`Excluir o perfil "${perfisAcesso[j].nome}"? Os usuários mantêm os acessos atuais (ficam como Personalizado).`))return;
+  perfisAcesso.splice(j,1);await _salvarConfigAcesso();abaPerfisAcesso();
+};
+
+/* ---------------- Cadastros: itens do checklist ---------------- */
+window.abaChecklist=function(){
+  document.getElementById("abaConteudo").innerHTML=`<h3>☑️ Checklist de início</h3>
+    <div style="background:#f8f9fa;border:1px solid #d0d9f0;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1f2937;">Todo ticket novo recebe estes itens. No ticket, o credenciamento <b>aprova</b> ou <b>recusa</b> cada item (com motivo). O SLA dos serviços só começa quando todos estiverem aprovados. Alterações aqui valem para tickets <b>criados a partir de agora</b>. Sem itens = SLA começa na abertura, como antes.</div>
+    <div class="ck-cfg">${MODULOS.map(m=>`<div class="ck-cfg-col" style="border-top:4px solid ${m.cor};">
+      <b style="color:${m.cor};">${m.icone} ${m.nome}</b>
+      <label style="display:block;font-size:11px;color:#666;margin-top:10px;">📧 E-mail do credenciamento (recebe os documentos corrigidos)</label>
+      <input type="email" value="${escHtml(emailCredenciamento[m.id]||"")}" placeholder="credenciamento@empresa.com" onchange="salvarEmailCredenciamento('${m.id}',this.value)">
+      <div style="margin-top:10px;">${(checklistItens[m.id]||[]).map((tx,i)=>`<div class="ck-cfg-row"><span style="font-size:11px;color:#888;width:18px;">${i+1}.</span><input value="${escHtml(tx)}" onchange="editarItemChecklist('${m.id}',${i},this.value)"><button class="btn-danger" onclick="removerItemChecklist('${m.id}',${i})">✕</button></div>`).join("")||'<p style="color:#999;font-size:12px;font-style:italic;">Sem itens — SLA começa na abertura.</p>'}</div>
+      <div class="ck-cfg-row" style="margin-top:8px;"><input id="ck-novo-${m.id}" placeholder="Novo item" onkeydown="if(event.key==='Enter')addItemChecklist('${m.id}')"><button class="btn-success" onclick="addItemChecklist('${m.id}')">+</button></div>
+    </div>`).join("")}</div>`;
+};
+window.salvarEmailCredenciamento=async function(mod,v){emailCredenciamento[mod]=(v||"").trim();await _salvarConfigAcesso();_toast("E-mail do credenciamento salvo.");};
+window.addItemChecklist=async function(mod){const el=document.getElementById("ck-novo-"+mod);const v=(el?.value||"").trim();if(!v)return;if(!checklistItens[mod])checklistItens[mod]=[];checklistItens[mod].push(v);await _salvarConfigAcesso();abaChecklist();};
+window.editarItemChecklist=async function(mod,i,v){v=(v||"").trim();if(!v){removerItemChecklist(mod,i);return;}checklistItens[mod][i]=v;await _salvarConfigAcesso();};
+window.removerItemChecklist=async function(mod,i){checklistItens[mod].splice(i,1);await _salvarConfigAcesso();abaChecklist();};
+
+
+/* ============================================================
+   SENHA PROVISÓRIA / TROCA OBRIGATÓRIA NO PRIMEIRO ACESSO
+   - Usuário novo e senha resetada pelo ADM ficam com trocarSenha=true.
+   - No login, antes de liberar o CRM, ele precisa criar uma senha nova.
+   ============================================================ */
+(function(){
+  const css=`
+  .senha-pend{font-size:11px;font-weight:600;color:#856404;background:#fff3cd;border:1px solid #f6c23e;border-radius:12px;padding:3px 10px;align-self:center;}
+  .senha-ok{font-size:11px;color:#6c757d;align-self:center;}
+  #trocaSenhaTela{position:fixed;inset:0;background:#eef2f7;z-index:2000;display:none;align-items:center;justify-content:center;padding:16px;overflow:auto;}
+  #trocaSenhaTela .login-box{width:380px;}
+  .ts-regras{font-size:12px;color:#555;background:#f4f6fb;border-radius:8px;padding:10px 12px;margin:4px 0 14px;line-height:1.7;}
+  .ts-regras .ok{color:#1cc88a;font-weight:600;}
+  .ts-ver{font-size:12px;color:#4e73df;cursor:pointer;background:none!important;padding:0;margin:0;}
+  `;
+  const st=document.createElement("style");st.textContent=css;document.head.appendChild(st);
+  _injetar("trocaSenhaTela",`<div id="trocaSenhaTela" role="dialog" aria-modal="true" aria-labelledby="tsTitulo"><div class="login-box">
+    <h2 id="tsTitulo">🔑 Crie sua senha</h2>
+    <p class="login-sub" id="tsSub"></p>
+    <div class="login-field"><label for="tsNova">Nova senha</label><input type="password" id="tsNova" autocomplete="new-password" oninput="_tsValidar()" onkeydown="if(event.key==='Enter')document.getElementById('tsConf').focus()"></div>
+    <div class="login-field"><label for="tsConf">Confirme a nova senha</label><input type="password" id="tsConf" autocomplete="new-password" oninput="_tsValidar()" onkeydown="if(event.key==='Enter')salvarSenhaObrigatoria()"></div>
+    <button class="ts-ver" type="button" onclick="_tsMostrar(this)">👁 Mostrar senha</button>
+    <div class="ts-regras" id="tsRegras"></div>
+    <div id="tsErro" class="login-error"></div>
+    <button class="btn-primary" style="width:100%;padding:11px;font-size:14px;margin-top:6px;" onclick="salvarSenhaObrigatoria()">Salvar senha e entrar</button>
+    <button class="btn-dark" style="width:100%;padding:9px;margin-top:8px;" onclick="cancelarTrocaSenha()">Sair</button>
+  </div></div>`);
+  _injetar("modalResetSenha",`<div id="modalResetSenha" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>🔑 Resetar senha</h3>
+    <p id="modalResetSenhaInfo" style="font-size:13px;color:#555;"></p>
+    <label style="display:block;"><b>Senha provisória *</b></label>
+    <div style="display:flex;gap:6px;align-items:center;margin:6px 0 6px;"><input id="modalResetSenhaValor" style="margin:0;font-family:ui-monospace,Consolas,monospace;font-size:15px;letter-spacing:1px;"><button class="btn-info" onclick="document.getElementById('modalResetSenhaValor').value=_gerarSenhaProvisoria()">Gerar</button><button class="btn-dark" onclick="navigator.clipboard&&navigator.clipboard.writeText(document.getElementById('modalResetSenhaValor').value);this.textContent='Copiada'">Copiar</button></div>
+    <div style="font-size:12px;color:#856404;background:#fff3cd;border:1px solid #f6c23e;border-radius:6px;padding:8px 10px;margin-bottom:14px;">Passe essa senha para o usuário. No próximo acesso ao CRM ele será obrigado a criar uma senha nova.</div>
+    <div style="display:flex;gap:8px;"><button class="btn-warning" style="color:#000;" onclick="confirmarResetSenha()">Resetar senha</button><button class="btn-dark" onclick="fecharModal('modalResetSenha')">Cancelar</button></div>
+  </div></div>`);
+})();
+const SENHA_MIN=6;
+function _gerarSenhaProvisoria(){const a="ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";const r=new Uint32Array(8);window.crypto.getRandomValues(r);return Array.from(r,x=>a[x%a.length]).join("");}
+function _tsRegras(nova,conf){
+  const prov=usuarioLogado?.senha||"";
+  return[
+    {ok:nova.length>=SENHA_MIN,txt:`Pelo menos ${SENHA_MIN} caracteres`},
+    {ok:!!nova&&nova!==prov,txt:"Diferente da senha provisória"},
+    {ok:!!nova&&nova.toLowerCase()!==(usuarioLogado?.nome||"").trim().toLowerCase(),txt:"Diferente do nome de usuário"},
+    {ok:!!nova&&nova===conf,txt:"As duas senhas iguais"}
+  ];
+}
+window._tsValidar=function(){
+  const r=_tsRegras(document.getElementById("tsNova").value,document.getElementById("tsConf").value);
+  document.getElementById("tsRegras").innerHTML=r.map(x=>`<div class="${x.ok?"ok":""}">${x.ok?"✔":"•"} ${x.txt}</div>`).join("");
+  document.getElementById("tsErro").style.display="none";
+  return r.every(x=>x.ok);
+};
+window._tsMostrar=function(b){const n=document.getElementById("tsNova"),c=document.getElementById("tsConf");const v=n.type==="password";n.type=c.type=v?"text":"password";b.textContent=v?"🙈 Ocultar senha":"👁 Mostrar senha";};
+function _abrirTrocaSenhaObrigatoria(){
+  document.getElementById("crmApp").style.display="none";
+  document.getElementById("tsSub").innerHTML=`Olá, <b>${escHtml(usuarioLogado.nome)}</b>. Você entrou com uma senha provisória. Para continuar, crie a sua senha pessoal.`;
+  ["tsNova","tsConf"].forEach(id=>{const e=document.getElementById(id);e.value="";e.type="password";});
+  _tsValidar();
+  document.getElementById("trocaSenhaTela").style.display="flex";
+  setTimeout(()=>document.getElementById("tsNova").focus(),50);
+}
+window.salvarSenhaObrigatoria=async function(){
+  if(!usuarioLogado)return;
+  const nova=document.getElementById("tsNova").value;
+  if(!_tsValidar()){const e=document.getElementById("tsErro");e.textContent="⚠ A senha ainda não atende todos os itens acima.";e.style.display="block";return;}
+  const u=usuarios.find(x=>x._id===usuarioLogado._id)||usuarioLogado;
+  u.senha=nova;u.trocarSenha=false;u.senhaAlteradaEm=agora();
+  await salvarUsuario(u);usuarioLogado=u;
+  document.getElementById("loginPassword").value="";
+  document.getElementById("trocaSenhaTela").style.display="none";
+  document.getElementById("crmApp").style.display="flex";
+  _entrarNoCrm();_toast("Senha criada com sucesso.");
+};
+window.cancelarTrocaSenha=function(){document.getElementById("trocaSenhaTela").style.display="none";logout();};
+let _resetIdx=null;
+window.abrirResetSenha=function(i){
+  const u=usuarios[i];if(!u)return;
+  if(!_pode("cadastros")){_negar("resetar senha");return;}
+  _resetIdx=i;
+  document.getElementById("modalResetSenhaInfo").innerHTML=`Usuário: <b>${escHtml(u.nome)}</b>`;
+  document.getElementById("modalResetSenhaValor").value=_gerarSenhaProvisoria();
+  document.getElementById("modalResetSenha").style.display="flex";
+};
+window.confirmarResetSenha=async function(){
+  const u=usuarios[_resetIdx];const v=(document.getElementById("modalResetSenhaValor").value||"").trim();
+  if(!u)return;if(!v){alert("Informe a senha provisória.");return;}
+  u.senha=v;u.trocarSenha=true;u.senhaResetadaEm=agora();u.senhaResetadaPor=usuarioLogado.nome;
+  await salvarUsuario(u);fecharModal("modalResetSenha");_resetIdx=null;
+  _toast(`Senha de ${u.nome} resetada. Ele vai criar uma nova no próximo acesso.`);
+  if(_telaAtual==="cadastros")abaUsuarios();
+};
+
 </script>
 </body>
 </html>
