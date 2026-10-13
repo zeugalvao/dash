@@ -701,7 +701,7 @@ function horasUteisEntre(inicio,fim){
 }
 
 function calcularSLARestante(ticket){const srvs=ticket.servicosTicket||[];const abertura=_inicioSLA(ticket);if(!abertura)return null;let pH=null,pP=0,pA=false,tem=false;const ativos=srvs.filter(s=>!s.finalizado?.marcado&&!s.expirado?.marcado);if(ativos.length){ativos.forEach(s=>{const sc=servicosCadastro.find(c=>c.nome===s.nome);if(!sc||!sc.sla)return;tem=true;const dec=horasUteisEntre(abertura,Date.now());const res=sc.sla-dec;const p=Math.min(100,Math.round((dec/sc.sla)*100));if(pH===null||res<pH){pH=res;pP=p;pA=res<0;}});}else if(!srvs.length){const n=ticket.servico||"";if(n){const sc=servicosCadastro.find(s=>s.nome===n);if(sc&&sc.sla){tem=true;const dec=horasUteisEntre(abertura,Date.now());pH=sc.sla-dec;pP=Math.min(100,Math.round((dec/sc.sla)*100));pA=pH<0;}}}if(!tem)return null;return{horas:pH,atrasado:pA,porcentagem:pP};}
-function calcularSLAServico(ticket,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return null;const sc=servicosCadastro.find(c=>c.nome===srv.nome);if(!sc||!sc.sla)return null;const _ini=_inicioSLA(ticket);if(!_ini)return null;const dec=horasUteisEntre(_ini,Date.now());const res=sc.sla-dec;return{horas:res,atrasado:res<0,porcentagem:Math.min(100,Math.round((dec/sc.sla)*100)),slaTotal:sc.sla};}
+function calcularSLAServico(ticket,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return null;const sc=servicosCadastro.find(c=>c.nome===srv.nome);if(!sc||!sc.sla)return null;const _ini=_inicioSLA(ticket);if(!_ini)return null;const dec=horasUteisEntre(_ini,Date.now())-_pausaSrvH(srv);const res=sc.sla-dec;return{horas:res,atrasado:res<0,porcentagem:Math.min(100,Math.round((dec/sc.sla)*100)),slaTotal:sc.sla};}
 function _normalizarAguardandoCliente(t){if(!t)return;if(typeof t.aguardandoClienteAcumuladoMs!=="number")t.aguardandoClienteAcumuladoMs=0;if(t.status==="Aguardando cliente"&&!t.aguardandoClienteInicio)t.aguardandoClienteInicio=t.pendenciaClienteData||t.ultimaAtualizacao||t.dataAbertura||agora();if(t.status!=="Aguardando cliente"&&t.aguardandoClienteInicio)finalizarAguardandoCliente(t,agora());}
 function iniciarAguardandoCliente(t,iso){if(!t)return;if(typeof t.aguardandoClienteAcumuladoMs!=="number")t.aguardandoClienteAcumuladoMs=0;t.aguardandoClienteInicio=iso||agora();}
 function finalizarAguardandoCliente(t,iso){if(!t)return
@@ -1574,6 +1574,7 @@ async function confirmarTransferencia(){
   if((destino||"").toLowerCase().includes("comercial"))tickets[idx].dataTransferenciaComercial=agora();
   else if(anteriorEraComercial)tickets[idx].dataTransferenciaComercial=null;
   if((destino||"").toLowerCase().includes("credenci"))tickets[idx].dataChegadaCredenciamento=agora();
+  if(anteriorEraComercial&&(destino||"").toLowerCase().includes("credenci")){tickets[idx].espelhoImplantacao=true;_logHistorico(idx,"🪞 Ticket espelhado no setor Implantação");}
   _logHistorico(idx,`Ticket transferido: "${anterior}" → "${destino}"`);
   tickets[idx].ultimaAtualizacao=agora();
   await salvarTicket(tickets[idx]);const tid=_ticketTransfId;fecharModal("modalTransf");_ticketTransfId=null;verTicket(tid);
@@ -1952,7 +1953,7 @@ async function _bkpListar(){
 function _destroyChart(id){if(_charts[id]){_charts[id].destroy();delete _charts[id];}}
 function _difHoras(a,b){if(!a||!b)return null;const d=(new Date(b)-new Date(a))/3600000;return d>=0?d:null;}
 function _horasPendenciaCliente(ticket){if(!ticket.pendenciaClienteData)return 0;const fim=ticket.status==="Aguardando cliente"?new Date().toISOString():(ticket.ultimaAtualizacao||new Date().toISOString());return _difHoras(ticket.pendenciaClienteData,fim)||0;}
-function _horasAtrasoServico(ticket,srv){if(!srv.iniciado?.marcado)return 0;const sc=servicosCadastro.find(s=>s.nome===srv.nome);if(!sc||!sc.sla)return 0;const ref=ticket.checklistObrigatorio?ticket.slaInicio:(ticket.dataChegadaCredenciamento||ticket.dataAbertura);if(!ref)return 0;const fim=srv.finalizado?.marcado?srv.finalizado.data:new Date().toISOString();const dec=horasUteisEntre(ref,fim);return Math.max(0,dec-sc.sla);}
+function _horasAtrasoServico(ticket,srv){if(!srv.iniciado?.marcado)return 0;const sc=servicosCadastro.find(s=>s.nome===srv.nome);if(!sc||!sc.sla)return 0;const ref=ticket.checklistObrigatorio?ticket.slaInicio:(ticket.dataChegadaCredenciamento||ticket.dataAbertura);if(!ref)return 0;const fim=srv.finalizado?.marcado?srv.finalizado.data:new Date().toISOString();const dec=horasUteisEntre(ref,fim)-_pausaSrvH(srv,fim);return Math.max(0,dec-sc.sla);}
 
 function mostrarDashboard(){
   _telaAtual="dashboard";_ticketAbertoId=null;
@@ -3255,18 +3256,20 @@ let perfisAcesso=JSON.parse(JSON.stringify(PERFIS_PADRAO));
 let checklistItens=JSON.parse(JSON.stringify(CHECKLIST_PADRAO));
 let _moduloAtual="interno";
 let emailCredenciamento={interno:"",revenda:""};
+let checklistsSetor=[];
 
 /* Configuração de acesso/checklist em tempo real (configuracoes/acesso) */
 try{
   db.collection("configuracoes").doc("acesso").onSnapshot(doc=>{
     if(doc.exists){const d=doc.data()||{};
       if(Array.isArray(d.perfisAcesso))perfisAcesso=d.perfisAcesso;
+      if(Array.isArray(d.checklistsSetor))checklistsSetor=d.checklistsSetor;
       if(d.emailCredenciamento&&typeof d.emailCredenciamento==="object")emailCredenciamento={interno:d.emailCredenciamento.interno||"",revenda:d.emailCredenciamento.revenda||""};
       if(d.checklistItens&&typeof d.checklistItens==="object")checklistItens={interno:d.checklistItens.interno||[],revenda:d.checklistItens.revenda||[]};
     }
   },e=>console.error("acesso:",e));
 }catch(e){console.error(e);}
-async function _salvarConfigAcesso(){try{await db.collection("configuracoes").doc("acesso").set({perfisAcesso,checklistItens,emailCredenciamento},{merge:true});}catch(e){console.error(e);alert("Não foi possível salvar a configuração. Verifique a conexão.");}}
+async function _salvarConfigAcesso(){try{await db.collection("configuracoes").doc("acesso").set({perfisAcesso,checklistItens,emailCredenciamento,checklistsSetor},{merge:true});}catch(e){console.error(e);alert("Não foi possível salvar a configuração. Verifique a conexão.");}}
 
 /* ---------------- Helpers de permissão ---------------- */
 function _modTicket(t){return(t&&t.modulo)||"interno";}
@@ -3302,7 +3305,7 @@ function _checklistPendente(t){return!!(t&&t.checklistObrigatorio&&!t.slaInicio)
 /* Visão: mantém regra de setor e filtra pelo módulo atual */
 function ticketsVisiveis(){
   let base;
-  const st=setorDoUsuario();base=st?tickets.filter(t=>t.setor===st):[...tickets];
+  const st=setorDoUsuario();base=st?tickets.filter(t=>t.setor===st||(_ehImplantacao(st)&&(_espelhadoImplantacao(t)||_temPendSrv(t)))):[...tickets];
   return base.filter(_ticketNoModulo);
 }
 
@@ -3397,7 +3400,7 @@ function _irInicio(msg){
   else _telaInicial(msg||"");
   if(msg&&_pode("ver"))_toast(msg);
 }
-function _toast(msg){const t=document.createElement("div");t.style.cssText="position:fixed;bottom:20px;right:20px;background:#1cc88a;color:white;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:9999;max-width:360px;";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
+function _toast(msg){document.getElementById("crmToast")?.remove();const t=document.createElement("div");t.id="crmToast";t.style.cssText="position:fixed;bottom:20px;right:20px;background:#1cc88a;color:white;padding:12px 18px;border-radius:10px;font-size:13px;box-shadow:0 4px 16px rgba(0,0,0,0.2);z-index:9999;max-width:360px;";t.textContent=msg;document.body.appendChild(t);setTimeout(()=>t.remove(),3500);}
 let _msgInicio="";
 function _telaInicial(msg){
   if(msg!==undefined)_msgInicio=msg||"";msg=_msgInicio;
@@ -3438,6 +3441,8 @@ window._atualizarTelaAtual=function(){
      (ex.: um ticket salvo) jogava a tela de volta para a aba Serviços e apagava o que estava sendo digitado. */
   if(_telaAtual==="cadastros")return;
   if(_telaAtual==="docrecusada"){try{mostrarDocRecusada();}catch(e){}return;}
+  if(_telaAtual==="cobrancas"){try{mostrarCobrancas();}catch(e){}return;}
+  if(_telaAtual==="pendsrv"){try{mostrarPendSrv();}catch(e){}return;}
   if(_telaAtual==="inicio"){try{_telaInicial();}catch(e){}return;}
   return _atualizarTelaOrig.apply(this,arguments);
 };
@@ -3500,7 +3505,7 @@ function _ckStatus(it){return it&&(it.status||(it.marcado?"aprovado":"pendente")
 function _ckItens(t){return(t&&t.checklistInicio)||[];}
 function _ticketFechado(t){return["Concluído","Encerrado","Cancelado"].includes(t.status);}
 function _ticketTemRecusa(t){return _ckItens(t).some(i=>_ckStatus(i)==="recusado");}
-function _podeCorrigir(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||_isTicketMeu(t)||_pode("alterar",_modTicket(t)));}
+function _podeCorrigir(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehImplantacao(_setorAtual)&&_setoresDoUsuario().some(_ehImplantacao)));}
 function _ordinal(n){return n+"ª";}
 const CK_ST={
   pendente:{cor:"#6c757d",bg:"#f1f3f5",txt:"Pendente"},
@@ -3558,6 +3563,8 @@ function _aplicarRestricoesSrv(t){
   if(_checklistPendente(t)){
     wrap.querySelectorAll('input[id^="chk_ini_"],input[id^="chk_ass_"],input[id^="chk_fin_"]').forEach(c=>{if(!c.checked){c.disabled=true;c.title="Conclua o checklist de início primeiro";}});
   }
+  _marcarPendSrv(t,wrap);
+  if(_ehImplantacao(_setorAtual))_colunaCobranca(t,wrap);
 }
 function _posProcessarTicket(t){
   const mod=_modTicket(t);const cont=document.getElementById("conteudo");if(!cont)return;
@@ -3565,6 +3572,8 @@ function _posProcessarTicket(t){
   const wrap=document.getElementById("tabelaSrvWrap");
   const bloco=wrap?wrap.closest('[style*="grid-column"]'):null;
   if(bloco&&t.checklistObrigatorio){const d=document.createElement("div");d.id="checklistBox";d.style.gridColumn="1/-1";d.innerHTML=_renderChecklist(t);bloco.parentNode.insertBefore(d,bloco);}
+  if(bloco){const html=_renderChecklistsSetor(t);if(html){const d=document.createElement("div");d.id="checklistsSetorBox";d.style.gridColumn="1/-1";d.innerHTML=html;bloco.parentNode.insertBefore(d,bloco);}}
+  if(_ehImplantacao(_setorAtual)&&_espelhadoImplantacao(t)){const h=cont.querySelector("h2");if(h)h.insertAdjacentHTML("afterend",`<span class="mod-pill" style="background:#6f42c1;font-size:11px;padding:3px 10px;" title="Ticket do Credenciamento espelhado na Implantação">🪞 Espelho · em ${escHtml(t.setor)}</span>`);}
   const esconder=sel=>cont.querySelectorAll(sel).forEach(b=>b.style.display="none");
   const podeAlterar=_pode("alterar",mod),podeSrv=_pode("servicos",mod);
   if(!podeAlterar){
@@ -3637,6 +3646,7 @@ window.confirmarRecusaDoc=async function(){
   Object.assign(a.it,{status:"recusado",marcado:false,motivo,usuario:usuarioLogado.nome,data:agr,obsCorrecao:"",emailEnviadoPara:""});
   _ckEvento(a.it,"recusado",motivo);
   _logHistorico(a.idx,`⛔ Checklist: "${a.it.texto}" RECUSADO (${_ordinal(a.it.recusas)} devolução) — Motivo: "${motivo}"`,"doc_recusada");
+  _devolverTicketImplantacao(a.idx);
   _pendCk={id:null,i:null};await _ckSalvar(a);
 };
 window.abrirCorrigirItem=function(id,i){
@@ -3657,6 +3667,7 @@ window.confirmarCorrigidoDoc=async function(){
   Object.assign(a.it,{status:"corrigido",marcado:false,obsCorrecao:obs,corrigidoPor:usuarioLogado.nome,corrigidoEm:agr,emailEnviadoPara:enviar&&em?em:""});
   _ckEvento(a.it,"corrigido",obs+(enviar&&em?` [reenviado para ${em}]`:""));
   _logHistorico(a.idx,`🔁 Checklist: "${a.it.texto}" CORRIGIDO (após ${_ordinal(a.it.recusas||1)} devolução)${obs?` — "${obs}"`:""}${enviar&&em?` — reenviado por e-mail para ${em}`:" — sem e-mail"}`,"doc_corrigida");
+  _retornarTicketCredenciamento(a.idx);
   if(enviar&&em){
     const assunto=encodeURIComponent(`[CRM] Documentação corrigida — Ticket #${a.t.id} — ${a.t.cliente||""}`);
     const corpo=encodeURIComponent(`Olá, credenciamento.\n\nSegue o documento corrigido.\n\nTicket: #${a.t.id}\nCliente: ${a.t.cliente||""}${a.t.cnpj?` (${a.t.cnpj})`:""}\nItem: ${a.it.texto}\nMotivo da recusa: ${a.it.motivo||""}\nCorreção: ${obs||"-"}\nDevoluções até agora: ${a.it.recusas||1}\n\n${usuarioLogado.nome}`);
@@ -3677,18 +3688,17 @@ window.reabrirChecklist=async function(id){
 _injetar("modalRecusarDoc",`<div id="modalRecusarDoc" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>✖ Recusar documento</h3><p id="modalRecusarDocInfo" style="font-size:13px;color:#555;"></p><label style="display:block;margin-top:6px;"><b>Motivo da recusa *</b></label><textarea id="modalRecusarDocMotivo" rows="3" maxlength="500" style="margin:6px 0 14px;resize:vertical;" placeholder="Ex.: contrato social não está legível"></textarea><div style="display:flex;gap:8px;"><button class="btn-danger" onclick="confirmarRecusaDoc()">Recusar documento</button><button class="btn-dark" onclick="fecharModal('modalRecusarDoc')">Cancelar</button></div></div></div>`);
 _injetar("modalCorrigidoDoc",`<div id="modalCorrigidoDoc" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>✅ Marcar como corrigido</h3><div id="modalCorrigidoDocInfo" style="font-size:13px;color:#555;margin-bottom:10px;"></div><label style="display:block;"><b>O que foi corrigido</b> <span style="font-size:11px;color:#888;">(opcional)</span></label><textarea id="modalCorrigidoDocObs" rows="2" maxlength="500" style="margin:6px 0 10px;resize:vertical;" placeholder="Ex.: enviado novo contrato social digitalizado"></textarea><label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;margin-bottom:14px;cursor:pointer;"><input type="checkbox" id="modalCorrigidoDocEmail" style="margin-top:1px;flex-shrink:0;"><span id="modalCorrigidoDocEmailInfo"></span></label><div style="display:flex;gap:8px;"><button class="btn-primary" onclick="confirmarCorrigidoDoc()">Marcar como corrigido</button><button class="btn-dark" onclick="fecharModal('modalCorrigidoDoc')">Cancelar</button></div></div></div>`);
 
-/* Tickets do módulo atual que o usuário deve acompanhar: ADM vê todos; os demais veem
-   os do seu setor e os que abriram / são donos (mesmo que o ticket já esteja em outro setor). */
-function _ticketsDoUsuarioNoModulo(){
-  const doMod=tickets.filter(_ticketNoModulo);
-  if(usuarioLogado.perfil==="adm")return doMod;
-  const vis=new Set(ticketsVisiveis().map(t=>t.id));
-  return doMod.filter(t=>vis.has(t.id)||_isTicketMeu(t));
-}
+/* Documentação recusada volta SOMENTE para o setor Implantação (ADM também vê em "Todos os setores"). */
+function _veDocRecusada(){if(!usuarioLogado||!_setorEscolhido)return false;if(_ehImplantacao(_setorAtual))return true;return usuarioLogado.perfil==="adm"&&_setorAtual==="";}
+function _ticketsDoUsuarioNoModulo(){return _veDocRecusada()?ticketsVisiveis():[];}
 function _docRecusadaTickets(){return _ticketsDoUsuarioNoModulo().filter(t=>!_ticketFechado(t)&&_ticketTemRecusa(t));}
 function _injetarCardDocRecusada(){
   const cont=document.getElementById("conteudo");if(!cont||!usuarioLogado)return;
   const old=document.getElementById("cardDocRecusada");if(old)old.remove();
+  const oc=document.getElementById("cardCobrancas");if(oc)oc.remove();
+  _injetarCardPendSrv();
+  _injetarCardCobrancas();
+  if(!_veDocRecusada())return;
   const lista=_docRecusadaTickets();const nItens=lista.reduce((s,t)=>s+_ckItens(t).filter(i=>_ckStatus(i)==="recusado").length,0);
   const ativo=lista.length>0;
   const html=`<div id="cardDocRecusada" class="doc-rec-card ${ativo?"ativo":""}" onclick="mostrarDocRecusada()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarDocRecusada()">
@@ -3704,6 +3714,7 @@ window.filtrarTickets=function(){const r=_filtrarOrig.apply(this,arguments);try{
 
 window.mostrarDocRecusada=function(){
   if(!usuarioLogado)return;
+  if(!_veDocRecusada()){_irInicio();return;}
   if(document.querySelector("#conteudo .doc-rec-tela textarea:focus,#conteudo .doc-rec-tela input:focus"))return;
   const verHist=_telaAtual==="docrecusada"&&!!document.getElementById("docRecHist")?.dataset.aberto;
   _telaAtual="docrecusada";_ticketAbertoId=null;
@@ -3794,6 +3805,10 @@ window.renderListaTickets=function(lista){
   if(!lista||!lista.length)return _renderListaOrig.apply(this,arguments);
   const marca='<div style="margin-top:5px;display:flex;flex-wrap:wrap;gap:4px;align-items:center;">';
   return lista.map(t=>{let h=_renderListaOrig([t]);
+    if(_ehImplantacao(_setorAtual)&&_espelhadoImplantacao(t))h=h.replace(marca,marca+`<span class="badge" style="background:#6f42c1;color:white;">🪞 Espelho · ${escHtml(t.setor)}</span>`);
+    {const ps=(t.servicosTicket||[]).filter(_pendAtiva);if(ps.length&&!_ticketFechado(t)){
+      h=h.replace(marca,marca+(_ehImplantacao(_setorAtual)?`<span class="badge" style="background:#6f42c1;color:white;">🧩 Pendência: ${ps.map(x=>escHtml(x.nome)).join(", ")}</span>`:`<span class="badge" style="background:#6f42c1;color:white;">↩ ${ps.length} serviço(s) na Implantação</span>`));}}
+    if(_ehImplantacao(_setorAtual)){const nA=_srvAtrasadosSemCobranca(t).length;if(nA)h=h.replace(marca,marca+`<span class="badge" style="background:#fd7e14;color:white;">📣 ${nA} atrasado(s) sem cobrança</span>`);}
     if(_checklistPendente(t)&&!_ticketFechado(t)){const its=_ckItens(t);
       const nR=its.filter(i=>_ckStatus(i)==="recusado").length,nC=its.filter(i=>_ckStatus(i)==="corrigido").length;
       let b=`<span class="badge" style="background:#6c757d;color:white;">☑️ Checklist ${its.filter(i=>_ckStatus(i)==="aprovado").length}/${its.length} · SLA pausado</span>`;
@@ -3934,7 +3949,8 @@ window.abaChecklist=function(){
       <input type="email" value="${escHtml(emailCredenciamento[m.id]||"")}" placeholder="credenciamento@empresa.com" onchange="salvarEmailCredenciamento('${m.id}',this.value)">
       <div style="margin-top:10px;">${(checklistItens[m.id]||[]).map((tx,i)=>`<div class="ck-cfg-row"><span style="font-size:11px;color:#888;width:18px;">${i+1}.</span><input value="${escHtml(tx)}" onchange="editarItemChecklist('${m.id}',${i},this.value)"><button class="btn-danger" onclick="removerItemChecklist('${m.id}',${i})">✕</button></div>`).join("")||'<p style="color:#999;font-size:12px;font-style:italic;">Sem itens — SLA começa na abertura.</p>'}</div>
       <div class="ck-cfg-row" style="margin-top:8px;"><input id="ck-novo-${m.id}" placeholder="Novo item" onkeydown="if(event.key==='Enter')addItemChecklist('${m.id}')"><button class="btn-success" onclick="addItemChecklist('${m.id}')">+</button></div>
-    </div>`).join("")}</div>`;
+    </div>`).join("")}</div>
+    ${usuarioLogado.perfil==="adm"?_htmlCadChecklistsSetor():""}`;
 };
 window.salvarEmailCredenciamento=async function(mod,v){emailCredenciamento[mod]=(v||"").trim();await _salvarConfigAcesso();_toast("E-mail do credenciamento salvo.");};
 window.addItemChecklist=async function(mod){const el=document.getElementById("ck-novo-"+mod);const v=(el?.value||"").trim();if(!v)return;if(!checklistItens[mod])checklistItens[mod]=[];checklistItens[mod].push(v);await _salvarConfigAcesso();abaChecklist();};
@@ -4186,6 +4202,330 @@ function _blocoSetoresUsuario(selId,prefix,u,perfilSelId){
   if(ps)ps.addEventListener("change",()=>{const adm=ps.value==="adm";document.getElementById("setacc-adm-"+prefix).style.display=adm?"block":"none";document.getElementById("setacc-chips-"+prefix).style.display=adm?"none":"flex";});
 }
 function _lerSetoresUsuario(prefix){return setores.filter((st,k)=>document.getElementById(`setacc-${prefix}-${k}`)?.checked);}
+
+
+/* ============================================================
+   IMPLANTAÇÃO
+   - Tickets transferidos do Comercial para o Credenciamento ficam
+     espelhados na Implantação (o ticket é o mesmo; nada é duplicado).
+   - Documentação recusada volta só para a Implantação.
+   - Em cada serviço atrasado a Implantação marca que cobrou o
+     Credenciamento (registro com usuário/data para acompanhamento).
+   ============================================================ */
+function _ehImplantacao(st){return _normSetor(st)==="implantacao";}
+function _ehCredenciamento(st){return _normSetor(st).includes("credenci");}
+function _espelhadoImplantacao(t){return!!t&&_ehCredenciamento(t.setor)&&!!(t.espelhoImplantacao||t.abertoPorComercial||t.donoComercial);}
+const COBRANCA_VALIDADE_H=24;
+function _ultimaCobranca(srv){const c=srv&&srv.cobrancas;return c&&c.length?c[c.length-1]:null;}
+function _cobradoRecente(srv){const u=_ultimaCobranca(srv);return!!u&&(Date.now()-new Date(u.data).getTime())<COBRANCA_VALIDADE_H*3600000;}
+function _srvAtrasado(t,srv){if(srv.finalizado?.marcado||srv.expirado?.marcado)return false;const sla=calcularSLAServico(t,srv);return!!(sla&&sla.atrasado);}
+function _srvAtrasadosSemCobranca(t){if(_ticketFechado(t))return[];return(t.servicosTicket||[]).map((s,i)=>({s,i})).filter(x=>_srvAtrasado(t,x.s)&&!_cobradoRecente(x.s));}
+function _podeCobrar(){return!!usuarioLogado&&_ehImplantacao(_setorAtual)&&(usuarioLogado.perfil==="adm"||_setoresDoUsuario().some(_ehImplantacao));}
+
+function _colunaCobranca(t,wrap){
+  const tab=wrap.querySelector("table.srv-table");if(!tab)return;
+  const head=tab.querySelector("tr");if(!head||head.querySelector(".th-cob"))return;
+  const ths=head.querySelectorAll("th");if(ths[1])ths[1].insertAdjacentHTML("afterend",`<th class="th-cob" style="text-align:center;width:130px;" title="Marque quando cobrar o Credenciamento sobre um serviço atrasado">📣 Cobrado</th>`);
+  (t.servicosTicket||[]).forEach((srv,i)=>{
+    const ini=wrap.querySelector("#chk_ini_"+i);const tr=ini?ini.closest("tr"):null;if(!tr)return;
+    const tds=tr.querySelectorAll(":scope > td");if(!tds[1])return;
+    const atras=_srvAtrasado(t,srv),rec=_cobradoRecente(srv),ult=_ultimaCobranca(srv),n=(srv.cobrancas||[]).length;
+    let html;
+    if(atras){
+      html=`<div class="chk-cell"><div class="chk-row"><input type="checkbox" id="cob_${i}" ${rec?"checked disabled":""} ${_podeCobrar()?"":"disabled"} title="${rec?`Já cobrado nas últimas ${COBRANCA_VALIDADE_H}h. Libera de novo depois disso.`:"Marque depois de cobrar o Credenciamento"}" onchange="registrarCobranca('${t.id}',${i},this)">${rec?'<span class="chk-ok">✔</span>':'<span class="cob-alerta">cobrar</span>'}</div>`;
+    }else html=`<span style="font-size:10px;color:#aaa;">${srv.finalizado?.marcado||srv.expirado?.marcado?"—":"no prazo"}</span>`;
+    if(ult)html+=`<div class="chk-info"><span class="chk-resp">${escHtml(ult.usuario)}</span><br>${formatarData(ult.data)}</div>`;
+    if(n)html+=`<div style="font-size:9px;color:#fd7e14;font-weight:700;margin-top:2px;">📣 ${n} cobrança(s)</div>`;
+    if(atras)html+="</div>";
+    tds[1].insertAdjacentHTML("afterend",`<td style="text-align:center;${atras&&!rec?"background:#fff4e6;":""}">${html}</td>`);
+  });
+}
+window.registrarCobranca=async function(id,i,el){
+  const idx=tickets.findIndex(t=>t.id===id);if(idx<0)return;const t=tickets[idx];const srv=(t.servicosTicket||[])[i];if(!srv)return;
+  if(!_podeCobrar()){_negar("registrar cobrança (somente setor Implantação)");if(el)el.checked=false;return;}
+  if(_cobradoRecente(srv)){if(el)el.checked=true;return;}
+  const sla=calcularSLAServico(t,srv);const atraso=sla&&sla.atrasado?Math.abs(sla.horas).toFixed(0):"?";
+  if(!srv.cobrancas)srv.cobrancas=[];
+  srv.cobrancas.push({usuario:usuarioLogado.nome,data:agora(),atrasoHoras:Number(atraso)||0});
+  _logHistorico(idx,`📣 Implantação cobrou o Credenciamento: serviço "${srv.nome}" atrasado ${atraso}h (${srv.cobrancas.length}ª cobrança)`,"cobranca");
+  t.ultimaAtualizacao=agora();await salvarTicket(t);
+  if(_telaAtual==="ticket"&&_ticketAbertoId===id)refreshTabelaSrv(idx);else if(_telaAtual==="cobrancas")mostrarCobrancas();
+};
+
+function _injetarCardCobrancas(){
+  if(!_ehImplantacao(_setorAtual))return;
+  const cont=document.getElementById("conteudo");if(!cont)return;
+  const pend=ticketsVisiveis().reduce((a,t)=>a+_srvAtrasadosSemCobranca(t).length,0);
+  const html=`<div id="cardCobrancas" class="doc-rec-card cob ${pend?"ativo":""}" onclick="mostrarCobrancas()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarCobrancas()">
+    <div class="doc-rec-num">${pend}</div>
+    <div style="flex:1;min-width:0;"><div class="doc-rec-tit">SERVIÇOS ATRASADOS SEM COBRANÇA</div>
+    <div class="doc-rec-sub">${pend?`Cobre o Credenciamento e marque no serviço (vale por ${COBRANCA_VALIDADE_H}h)`:"Todos os atrasados foram cobrados nas últimas 24h"}</div></div>
+    <span class="doc-rec-abrir">Abrir</span></div>`;
+  const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
+  if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
+}
+let _cobPeriodo=30;
+window.mostrarCobrancas=function(dias){
+  if(!usuarioLogado)return;if(!_ehImplantacao(_setorAtual)){_irInicio();return;}
+  if(dias)_cobPeriodo=dias;
+  _telaAtual="cobrancas";_ticketAbertoId=null;
+  const vis=ticketsVisiveis();
+  const linhas=[];vis.forEach(t=>{if(_ticketFechado(t))return;(t.servicosTicket||[]).forEach((s,i)=>{if(_srvAtrasado(t,s))linhas.push({t,s,i,sla:calcularSLAServico(t,s)});});});
+  linhas.sort((a,b)=>(_cobradoRecente(a.s)-_cobradoRecente(b.s))||(a.sla.horas-b.sla.horas));
+  const limite=Date.now()-_cobPeriodo*86400000;
+  const porUser={};vis.forEach(t=>(t.servicosTicket||[]).forEach(s=>(s.cobrancas||[]).forEach(c=>{if(new Date(c.data).getTime()>=limite){porUser[c.usuario]=(porUser[c.usuario]||0)+1;}})));
+  const ranking=Object.entries(porUser).sort((a,b)=>b[1]-a[1]);
+  const semCob=linhas.filter(l=>!_cobradoRecente(l.s)).length;
+  document.getElementById("conteudo").innerHTML=`<div style="max-width:980px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn-dark" onclick="_irInicio()">← Voltar</button>
+      <h2 style="margin:0;">📣 Acompanhamento de serviços atrasados</h2>
+    </div>
+    <div class="card" style="border-left-color:#fd7e14;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+        <b>${linhas.length} serviço(s) atrasado(s) · <span style="color:${semCob?"#e74a3b":"#1cc88a"};">${semCob} sem cobrança nas últimas ${COBRANCA_VALIDADE_H}h</span></b>
+      </div>
+      ${linhas.length?`<div class="srv-table-wrap"><table class="srv-table"><tr><th>Ticket / Cliente</th><th>Serviço</th><th style="text-align:center;">Atraso</th><th>Setor</th><th style="text-align:center;">Cobrado</th><th>Última cobrança</th><th></th></tr>
+      ${linhas.map(l=>{const rec=_cobradoRecente(l.s),ult=_ultimaCobranca(l.s),n=(l.s.cobrancas||[]).length;return`<tr style="${rec?"":"background:#fff4e6;"}">
+        <td><span style="font-size:11px;color:#aaa;">#${l.t.id}</span><br><b>${escHtml(l.t.cliente||"")}</b></td>
+        <td>${escHtml(l.s.nome)}</td>
+        <td style="text-align:center;color:#e74a3b;font-weight:700;">${Math.abs(l.sla.horas).toFixed(0)}h</td>
+        <td style="font-size:12px;">${escHtml(l.t.setor||"")}</td>
+        <td style="text-align:center;"><input type="checkbox" ${rec?"checked disabled":""} ${_podeCobrar()?"":"disabled"} onchange="registrarCobranca('${l.t.id}',${l.i},this)"></td>
+        <td style="font-size:11px;">${ult?`${escHtml(ult.usuario)}<br>${formatarData(ult.data)}`:'<span style="color:#e74a3b;">nunca cobrado</span>'}${n?`<div style="color:#fd7e14;font-weight:700;">📣 ${n} no total</div>`:""}</td>
+        <td><button class="btn-dark" style="font-size:11px;" onclick="verTicket('${l.t.id}')">Abrir</button></td>
+      </tr>`;}).join("")}</table></div>`:`<p style="color:#1cc88a;margin:0;">🎉 Nenhum serviço atrasado agora.</p>`}
+    </div>
+    <div class="card" style="border-left-color:#4e73df;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+        <h3 style="margin:0;">👤 Cobranças por funcionário</h3>
+        <select style="width:auto;margin:0;" onchange="mostrarCobrancas(Number(this.value))">${[7,30,90].map(d=>`<option value="${d}" ${d===_cobPeriodo?"selected":""}>Últimos ${d} dias</option>`).join("")}</select>
+      </div>
+      ${ranking.length?`<table class="srv-table" style="margin-top:10px;"><tr><th>Funcionário</th><th style="text-align:center;">Cobranças registradas</th></tr>${ranking.map(([u,n])=>`<tr><td>${escHtml(u)}</td><td style="text-align:center;font-weight:700;">${n}</td></tr>`).join("")}</table>`:`<p style="color:#999;font-size:13px;">Nenhuma cobrança registrada no período.</p>`}
+    </div>
+  </div>`;
+};
+
+/* ============================================================
+   CHECKLISTS POR SETOR (cadastro do ADM)
+   Ex.: "Treinamento" executado no setor Implantação.
+   ============================================================ */
+function _gid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
+function _clsDoTicket(t){return checklistsSetor.filter(c=>c.ativo!==false&&(c.itens||[]).length&&(!c.modulos||!c.modulos.length||c.modulos.includes(_modTicket(t))));}
+function _clEstado(t,c){return(t.checklistsSetor&&t.checklistsSetor[c.id])||{};}
+function _clPodeMarcar(c){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_setorEscolhido&&_normSetor(_setorAtual)===_normSetor(c.setor)));}
+function _renderChecklistsSetor(t){
+  const cls=_clsDoTicket(t).filter(c=>{const est=_clEstado(t,c);const temProgresso=Object.values(est).some(x=>x&&x.marcado);
+    return _normSetor(_setorAtual)===_normSetor(c.setor)||(usuarioLogado.perfil==="adm"&&_setorAtual==="")||temProgresso;});
+  if(!cls.length)return"";
+  return cls.map(c=>{const est=_clEstado(t,c);const itens=c.itens||[];const feitos=itens.filter(it=>est[it.id]&&est[it.id].marcado).length;
+    const ok=feitos===itens.length;const pode=_clPodeMarcar(c);
+    return`<div class="ck-box ${ok?"ok":""}" style="margin-bottom:10px;${ok?"":"border-color:#4e73df;"}">
+      <div class="ck-top"><b style="font-size:14px;">📋 ${escHtml(c.nome)}</b>
+        <span style="display:flex;gap:4px;flex-wrap:wrap;"><span class="badge" style="background:#374151;color:white;">${_iconeSetor(c.setor)} ${escHtml(c.setor)}</span>
+        <span class="badge" style="background:${ok?"#1cc88a":"#4e73df"};color:white;">${ok?"✅ Concluído":`${feitos}/${itens.length}`}</span></span></div>
+      <div class="ck-prog"><div style="width:${itens.length?Math.round(feitos/itens.length*100):0}%;"></div></div>
+      ${itens.map(it=>{const e=est[it.id];const id=`cls_${c.id}_${it.id}`;return`<div class="ck-item"><input type="checkbox" id="${id}" style="width:auto;margin:0;" ${e&&e.marcado?"checked":""} ${pode?"":"disabled"} onchange="toggleChecklistSetor('${t.id}','${c.id}','${it.id}',this.checked)">
+        <label for="${id}" style="flex:1;cursor:${pode?"pointer":"default"};">${escHtml(it.texto)}${e&&e.marcado?`<div class="ck-quem">✔ ${escHtml(e.usuario||"")} — ${formatarData(e.data)}</div>`:""}</label></div>`;}).join("")}
+      ${pode?"":`<div style="font-size:11px;color:#6c757d;margin-top:6px;">Executado pelo setor ${escHtml(c.setor)}.</div>`}
+    </div>`;}).join("");
+}
+window.toggleChecklistSetor=async function(tid,cid,iid,marcado){
+  const idx=tickets.findIndex(t=>t.id===tid);if(idx<0)return;const t=tickets[idx];
+  const c=checklistsSetor.find(x=>x.id===cid);if(!c)return;
+  if(!_clPodeMarcar(c)){_negar(`marcar o checklist (somente setor ${c.setor})`);verTicket(tid);return;}
+  const it=(c.itens||[]).find(x=>x.id===iid);if(!it)return;
+  if(!t.checklistsSetor)t.checklistsSetor={};if(!t.checklistsSetor[cid])t.checklistsSetor[cid]={};
+  t.checklistsSetor[cid][iid]={marcado,usuario:marcado?usuarioLogado.nome:"",data:marcado?agora():"",texto:it.texto};
+  _logHistorico(idx,`📋 ${c.nome}: "${it.texto}" ${marcado?"marcado":"desmarcado"}`);
+  const est=t.checklistsSetor[cid];if(marcado&&c.itens.every(x=>est[x.id]&&est[x.id].marcado))_logHistorico(idx,`✅ Checklist "${c.nome}" concluído (${c.setor})`);
+  t.ultimaAtualizacao=agora();await salvarTicket(t);verTicket(tid);
+};
+function _htmlCadChecklistsSetor(){
+  return`<h3 style="margin-top:28px;">📋 Checklists por setor</h3>
+  <div style="background:#f0f4ff;border:1px solid #d0d9f0;border-radius:8px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#1f2937;">Crie checklists e escolha <b>em qual setor</b> eles são executados (ex.: <i>Treinamento</i> na Implantação). Eles aparecem dentro do ticket para quem estiver naquele setor; os outros setores só veem o andamento. Não afetam o SLA.</div>
+  ${checklistsSetor.map((c,k)=>`<div class="ck-cfg-col" style="margin-bottom:12px;border-top:4px solid ${c.ativo===false?"#adb5bd":"#4e73df"};">
+    <div style="display:grid;grid-template-columns:2fr 1.3fr auto;gap:8px;align-items:end;">
+      <div><label style="font-size:11px;color:#666;">Nome do checklist</label><input value="${escHtml(c.nome||"")}" onchange="editarClSetor(${k},'nome',this.value)"></div>
+      <div><label style="font-size:11px;color:#666;">Executado no setor</label><select onchange="editarClSetor(${k},'setor',this.value)">${setores.map(st=>`<option ${st===c.setor?"selected":""}>${escHtml(st)}</option>`).join("")}</select></div>
+      <div style="display:flex;gap:6px;"><button class="btn-dark" onclick="editarClSetor(${k},'ativo',${c.ativo===false?"true":"false"})">${c.ativo===false?"Ativar":"Desativar"}</button><button class="btn-danger" onclick="excluirClSetor(${k})">Excluir</button></div>
+    </div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin:8px 0 4px;"><span style="color:#666;">Vale para:</span>${MODULOS.map(m=>`<label style="display:inline-flex;gap:5px;align-items:center;cursor:pointer;"><input type="checkbox" style="width:auto;margin:0;" ${!c.modulos||!c.modulos.length||c.modulos.includes(m.id)?"checked":""} onchange="toggleModClSetor(${k},'${m.id}',this.checked)"> ${m.icone} ${m.nome}</label>`).join("")}${c.ativo===false?'<span class="badge" style="background:#adb5bd;color:white;">Desativado</span>':""}</div>
+    <div style="margin-top:8px;">${(c.itens||[]).map((it,i)=>`<div class="ck-cfg-row"><span style="font-size:11px;color:#888;width:18px;">${i+1}.</span><input value="${escHtml(it.texto)}" onchange="editarItemClSetor(${k},${i},this.value)"><button class="btn-dark" title="Subir" ${i===0?"disabled":""} onclick="moverItemClSetor(${k},${i},-1)">↑</button><button class="btn-danger" onclick="removerItemClSetor(${k},${i})">✕</button></div>`).join("")||'<p style="color:#999;font-size:12px;font-style:italic;">Sem itens.</p>'}</div>
+    <div class="ck-cfg-row" style="margin-top:8px;"><input id="cls-novo-${k}" placeholder="Novo item" onkeydown="if(event.key==='Enter')addItemClSetor(${k})"><button class="btn-success" onclick="addItemClSetor(${k})">+</button></div>
+  </div>`).join("")}
+  <div style="border:2px dashed #d0d9f0;border-radius:8px;padding:12px;background:#f4f6fb;display:grid;grid-template-columns:2fr 1.3fr auto;gap:8px;align-items:end;">
+    <div><label style="font-size:11px;color:#666;">Novo checklist</label><input id="cls-novo-nome" placeholder="Ex.: Treinamento"></div>
+    <div><label style="font-size:11px;color:#666;">Executado no setor</label><select id="cls-novo-setor">${setores.map(st=>`<option ${_ehImplantacao(st)?"selected":""}>${escHtml(st)}</option>`).join("")}</select></div>
+    <button class="btn-success" onclick="criarClSetor()">+ Criar</button>
+  </div>`;
+}
+async function _salvarCls(){await _salvarConfigAcesso();abaChecklist();}
+window.criarClSetor=async function(){const n=(document.getElementById("cls-novo-nome").value||"").trim();if(!n){alert("Informe o nome do checklist.");return;}
+  checklistsSetor.push({id:_gid(),nome:n,setor:document.getElementById("cls-novo-setor").value,modulos:MODULOS.map(m=>m.id),ativo:true,itens:[]});await _salvarCls();};
+window.editarClSetor=async function(k,campo,v){const c=checklistsSetor[k];if(!c)return;if(campo==="nome"){v=(v||"").trim();if(!v){alert("O nome não pode ficar vazio.");abaChecklist();return;}}c[campo]=v;await _salvarCls();};
+window.excluirClSetor=async function(k){const c=checklistsSetor[k];if(!c)return;if(!confirm(`Excluir o checklist "${c.nome}"? Os tickets deixam de mostrá-lo (o histórico do ticket continua registrado). Se quiser só esconder, use Desativar.`))return;checklistsSetor.splice(k,1);await _salvarCls();};
+window.toggleModClSetor=async function(k,mod,on){const c=checklistsSetor[k];if(!c)return;let ms=c.modulos&&c.modulos.length?[...c.modulos]:MODULOS.map(m=>m.id);ms=on?[...new Set([...ms,mod])]:ms.filter(x=>x!==mod);if(!ms.length){alert("Deixe pelo menos um módulo.");abaChecklist();return;}c.modulos=ms;await _salvarCls();};
+window.addItemClSetor=async function(k){const el=document.getElementById("cls-novo-"+k);const v=(el?.value||"").trim();if(!v)return;const c=checklistsSetor[k];if(!c.itens)c.itens=[];c.itens.push({id:_gid(),texto:v});await _salvarCls();setTimeout(()=>document.getElementById("cls-novo-"+k)?.focus(),50);};
+window.editarItemClSetor=async function(k,i,v){v=(v||"").trim();if(!v){removerItemClSetor(k,i);return;}checklistsSetor[k].itens[i].texto=v;await _salvarConfigAcesso();};
+window.removerItemClSetor=async function(k,i){checklistsSetor[k].itens.splice(i,1);await _salvarCls();};
+window.moverItemClSetor=async function(k,i,d){const a=checklistsSetor[k].itens;const j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];await _salvarCls();};
+
+(function(){const st=document.createElement("style");st.textContent=`
+  .doc-rec-card.cob.ativo{background:#fd7e14;border-color:#fd7e14;box-shadow:0 3px 10px rgba(253,126,20,.3);}
+  .cob-alerta{font-size:10px;font-weight:700;color:#fd7e14;text-transform:uppercase;}
+  @media(max-width:768px){.ck-cfg-col>div[style*="grid-template-columns"]{grid-template-columns:1fr!important;}}
+`;document.head.appendChild(st);})();
+
+
+/* ============================================================
+   DEVOLUÇÕES PARA A IMPLANTAÇÃO
+   a) Documento recusado no checklist → o TICKET vai para Implantação.
+      Quando todos os recusados forem corrigidos → volta para o setor de origem.
+   b) Pendência de SERVIÇO: o Credenciamento aciona a Implantação só para
+      aquele serviço (o ticket continua no Credenciamento). O SLA desse
+      serviço fica pausado enquanto estiver com a Implantação.
+   ============================================================ */
+function _nomeSetorImpl(){return setores.find(_ehImplantacao)||"Implantação";}
+function _devolverTicketImplantacao(idx){
+  const t=tickets[idx];if(!t||_ehImplantacao(t.setor))return;
+  const de=t.setor;const para=_nomeSetorImpl();
+  t.setorAntesDevolucao=de;t.respAntesDevolucao=t.responsavel||"";
+  t.setor=para;t.responsavel="";
+  _logHistorico(idx,`🔀 Ticket transferido automaticamente: "${de}" → "${para}" (documentação recusada)`);
+  _toast(`Ticket #${t.id} enviado para ${para}.`);
+}
+function _retornarTicketCredenciamento(idx){
+  const t=tickets[idx];if(!t||!t.setorAntesDevolucao||!_ehImplantacao(t.setor))return;
+  if(_ckItens(t).some(i=>_ckStatus(i)==="recusado"))return;
+  const para=t.setorAntesDevolucao;
+  t.setor=para;t.responsavel=t.respAntesDevolucao||"";
+  t.setorAntesDevolucao=null;t.respAntesDevolucao=null;
+  _logHistorico(idx,`🔀 Ticket transferido automaticamente: "${_nomeSetorImpl()}" → "${para}" (documentação corrigida, aguardando reanálise)`);
+  _toast(`Ticket #${t.id} devolvido para ${para}.`);
+}
+
+function _pendAtiva(srv){return!!(srv&&srv.pendImplantacao&&srv.pendImplantacao.ativa);}
+function _temPendSrv(t){return!_ticketFechado(t)&&(t.servicosTicket||[]).some(_pendAtiva);}
+function _pausaSrvH(srv,fimIso){
+  let h=Number(srv&&srv.slaPausaH)||0;
+  if(_pendAtiva(srv))h+=horasUteisEntre(srv.pendImplantacao.data,fimIso||new Date().toISOString());
+  return h;
+}
+function _podeAcionarImpl(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehCredenciamento(_setorAtual)&&_pode("servicos",_modTicket(t))));}
+function _podeDevolverCred(){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehImplantacao(_setorAtual)&&_setoresDoUsuario().some(_ehImplantacao)));}
+
+/* 48h sem atualização não vale para serviço que está com a Implantação */
+const _prec48Orig=window.servicoPrecisaAtualizacao48h;
+window.servicoPrecisaAtualizacao48h=function(t,srv){if(_pendAtiva(srv))return false;return _prec48Orig.apply(this,arguments);};
+
+function _marcarPendSrv(t,wrap){
+  const naImpl=_ehImplantacao(_setorAtual);
+  const soPend=naImpl&&!_ehImplantacao(t.setor)&&!_espelhadoImplantacao(t);
+  (t.servicosTicket||[]).forEach((srv,i)=>{
+    const ini=wrap.querySelector("#chk_ini_"+i);const tr=ini?ini.closest("tr"):null;if(!tr)return;
+    const td=tr.querySelector(":scope > td");if(!td)return;
+    const ativa=_pendAtiva(srv),n=(srv.pendHist||[]).filter(h=>h.acao==="acionado").length;
+    if(soPend&&!ativa){tr.style.display="none";return;}
+    let h="";
+    if(ativa){const p=srv.pendImplantacao;
+      tr.style.background="#f3eefc";
+      h+=`<div class="pend-srv"><b>↩ Com a Implantação</b> desde ${formatarData(p.data)}<div class="pend-desc">${escHtml(p.descricao)}</div><div class="ck-quem">acionado por ${escHtml(p.usuario)} · SLA pausado</div>
+        ${_podeDevolverCred()?`<button class="btn-success" onclick="abrirDevolverCred('${t.id}',${i})">↪ Devolver ao Credenciamento</button>`:""}</div>`;
+    }else if(_podeAcionarImpl(t)&&!srv.finalizado?.marcado&&!srv.expirado?.marcado&&!_ticketFechado(t)){
+      h+=`<button class="btn-acionar" onclick="abrirAcionarImpl('${t.id}',${i})" title="Devolver só este serviço para a Implantação tratar a pendência">↩ Acionar Implantação</button>`;
+    }
+    if(n)h+=`<div style="font-size:9px;color:#6f42c1;font-weight:700;margin-top:3px;">🔁 ${n}x para Implantação</div>`;
+    if(h)td.insertAdjacentHTML("beforeend",h);
+  });
+  if(soPend&&!wrap.querySelector(".pend-aviso"))wrap.insertAdjacentHTML("afterbegin",`<div class="pend-aviso">🧩 Este ticket está no ${escHtml(t.setor)}. Aqui aparecem só os serviços devolvidos para a Implantação.</div>`);
+}
+
+_injetar("modalAcionarImpl",`<div id="modalAcionarImpl" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>↩ Acionar Implantação</h3><p id="modalAcionarImplInfo" style="font-size:13px;color:#555;"></p><label style="display:block;"><b>Qual é a pendência? *</b></label><textarea id="modalAcionarImplDesc" rows="3" maxlength="600" style="margin:6px 0 8px;resize:vertical;" placeholder="Ex.: cliente precisa enviar comprovante de endereço atualizado"></textarea><div style="font-size:12px;color:#555;background:#f3eefc;border:1px solid #c9b6ef;border-radius:6px;padding:8px 10px;margin-bottom:14px;">Só este serviço vai para a Implantação. O ticket continua no Credenciamento e o SLA deste serviço fica pausado até a Implantação devolver.</div><div style="display:flex;gap:8px;"><button class="btn-primary" style="background:#6f42c1;" onclick="confirmarAcionarImpl()">Enviar para Implantação</button><button class="btn-dark" onclick="fecharModal('modalAcionarImpl')">Cancelar</button></div></div></div>`);
+_injetar("modalDevolverCred",`<div id="modalDevolverCred" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>↪ Devolver ao Credenciamento</h3><div id="modalDevolverCredInfo" style="font-size:13px;color:#555;margin-bottom:10px;"></div><label style="display:block;"><b>Retorno para o Credenciamento *</b></label><textarea id="modalDevolverCredObs" rows="3" maxlength="600" style="margin:6px 0 14px;resize:vertical;" placeholder="Ex.: falei com o cliente, comprovante enviado por e-mail"></textarea><div style="display:flex;gap:8px;"><button class="btn-success" onclick="confirmarDevolverCred()">Devolver ao Credenciamento</button><button class="btn-dark" onclick="fecharModal('modalDevolverCred')">Cancelar</button></div></div></div>`);
+let _pendSrvAlvo={id:null,i:null};
+function _srvAlvo(id,i){const idx=tickets.findIndex(t=>t.id===id);if(idx<0)return null;const t=tickets[idx];const srv=(t.servicosTicket||[])[i];return srv?{idx,t,srv}:null;}
+window.abrirAcionarImpl=function(id,i){
+  const a=_srvAlvo(id,i);if(!a)return;if(!_podeAcionarImpl(a.t)){_negar("acionar a Implantação (somente Credenciamento)");return;}
+  _pendSrvAlvo={id,i};
+  document.getElementById("modalAcionarImplInfo").innerHTML=`Ticket #${escHtml(id)} — <b>${escHtml(a.t.cliente||"")}</b><br>Serviço: <b>${escHtml(a.srv.nome)}</b>`;
+  document.getElementById("modalAcionarImplDesc").value="";
+  document.getElementById("modalAcionarImpl").style.display="flex";setTimeout(()=>document.getElementById("modalAcionarImplDesc").focus(),50);
+};
+window.confirmarAcionarImpl=async function(){
+  const desc=(document.getElementById("modalAcionarImplDesc").value||"").trim();if(!desc){alert("Descreva a pendência.");return;}
+  const a=_srvAlvo(_pendSrvAlvo.id,_pendSrvAlvo.i);fecharModal("modalAcionarImpl");if(!a||_pendAtiva(a.srv))return;
+  const agr=agora();
+  a.srv.pendImplantacao={ativa:true,descricao:desc,usuario:usuarioLogado.nome,data:agr};
+  if(!a.srv.pendHist)a.srv.pendHist=[];a.srv.pendHist.push({acao:"acionado",texto:desc,usuario:usuarioLogado.nome,data:agr});
+  _logHistorico(a.idx,`↩ Serviço "${a.srv.nome}" devolvido para a Implantação (${a.srv.pendHist.filter(h=>h.acao==="acionado").length}ª vez) — Pendência: "${desc}"`,"pend_impl");
+  a.t.ultimaAtualizacao=agr;await salvarTicket(a.t);_pendSrvAlvo={id:null,i:null};
+  _toast(`Serviço ${a.srv.nome} enviado para a Implantação.`);_recarregarPend(a);
+};
+window.abrirDevolverCred=function(id,i){
+  const a=_srvAlvo(id,i);if(!a||!_pendAtiva(a.srv))return;if(!_podeDevolverCred()){_negar("devolver ao Credenciamento (somente Implantação)");return;}
+  _pendSrvAlvo={id,i};const p=a.srv.pendImplantacao;
+  document.getElementById("modalDevolverCredInfo").innerHTML=`Ticket #${escHtml(id)} — <b>${escHtml(a.t.cliente||"")}</b><br>Serviço: <b>${escHtml(a.srv.nome)}</b><div style="margin-top:8px;background:#f3eefc;border:1px solid #c9b6ef;border-radius:6px;padding:8px 10px;"><b>Pendência:</b> ${escHtml(p.descricao)}<div class="ck-quem">${escHtml(p.usuario)} — ${formatarData(p.data)}</div></div>`;
+  document.getElementById("modalDevolverCredObs").value="";
+  document.getElementById("modalDevolverCred").style.display="flex";setTimeout(()=>document.getElementById("modalDevolverCredObs").focus(),50);
+};
+window.confirmarDevolverCred=async function(){
+  const obs=(document.getElementById("modalDevolverCredObs").value||"").trim();if(!obs){alert("Escreva o retorno para o Credenciamento.");return;}
+  const a=_srvAlvo(_pendSrvAlvo.id,_pendSrvAlvo.i);fecharModal("modalDevolverCred");if(!a||!_pendAtiva(a.srv))return;
+  const agr=agora();const p=a.srv.pendImplantacao;const horas=horasUteisEntre(p.data,agr);
+  a.srv.slaPausaH=(Number(a.srv.slaPausaH)||0)+horas;
+  Object.assign(p,{ativa:false,retorno:obs,devolvidoPor:usuarioLogado.nome,devolvidoEm:agr});
+  if(!a.srv.pendHist)a.srv.pendHist=[];a.srv.pendHist.push({acao:"devolvido",texto:obs,usuario:usuarioLogado.nome,data:agr,horas});
+  _logHistorico(a.idx,`↪ Implantação devolveu o serviço "${a.srv.nome}" ao Credenciamento (${horas.toFixed(1)}h úteis com a Implantação) — Retorno: "${obs}"`,"pend_impl_ret");
+  a.t.ultimaAtualizacao=agr;await salvarTicket(a.t);_pendSrvAlvo={id:null,i:null};
+  _toast(`Serviço ${a.srv.nome} devolvido ao Credenciamento.`);_recarregarPend(a);
+};
+function _recarregarPend(a){if(_telaAtual==="ticket"&&_ticketAbertoId===a.t.id)verTicket(a.t.id);else if(_telaAtual==="pendsrv")mostrarPendSrv();}
+
+function _pendSrvLista(){const r=[];ticketsVisiveis().forEach(t=>{if(_ticketFechado(t))return;(t.servicosTicket||[]).forEach((s,i)=>{if(_pendAtiva(s))r.push({t,s,i});});});return r.sort((a,b)=>new Date(a.s.pendImplantacao.data)-new Date(b.s.pendImplantacao.data));}
+function _injetarCardPendSrv(){
+  if(!_ehImplantacao(_setorAtual))return;
+  const cont=document.getElementById("conteudo");if(!cont)return;
+  document.getElementById("cardPendSrv")?.remove();
+  const l=_pendSrvLista();
+  const html=`<div id="cardPendSrv" class="doc-rec-card pend ${l.length?"ativo":""}" onclick="mostrarPendSrv()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarPendSrv()">
+    <div class="doc-rec-num">${l.length}</div>
+    <div style="flex:1;min-width:0;"><div class="doc-rec-tit">PENDÊNCIAS DE SERVIÇO</div>
+    <div class="doc-rec-sub">${l.length?`${new Set(l.map(x=>x.t.id)).size} cliente(s) · serviços devolvidos pelo Credenciamento`:"Nenhum serviço devolvido pelo Credenciamento"}</div></div>
+    <span class="doc-rec-abrir">Abrir</span></div>`;
+  const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
+  if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
+}
+window.mostrarPendSrv=function(){
+  if(!usuarioLogado)return;if(!_ehImplantacao(_setorAtual)){_irInicio();return;}
+  if(document.querySelector(".modal-overlay[style*='flex']"))return;
+  _telaAtual="pendsrv";_ticketAbertoId=null;
+  const l=_pendSrvLista();
+  document.getElementById("conteudo").innerHTML=`<div style="max-width:900px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn-dark" onclick="_irInicio()">← Voltar</button><h2 style="margin:0;">🧩 Pendências de serviço</h2>
+      <span style="font-size:13px;color:#888;">devolvidas pelo Credenciamento · ${l.length} serviço(s)</span></div>
+    ${l.length?l.map(x=>{const p=x.s.pendImplantacao;const n=(x.s.pendHist||[]).filter(h=>h.acao==="acionado").length;const hrs=horasUteisEntre(p.data,new Date().toISOString());
+      return`<div class="card" style="border-left-color:#6f42c1;">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;">
+          <div><span style="font-size:11px;color:#aaa;">#${x.t.id}</span> <b style="font-size:15px;">${escHtml(x.t.cliente||"")}</b>${x.t.cnpj?` <span style="font-size:11px;color:#888;">📄 ${escHtml(x.t.cnpj)}</span>`:""}
+            <div style="margin-top:4px;"><span class="badge" style="background:#6f42c1;color:white;">🧩 ${escHtml(x.s.nome)}</span> ${n>1?`<span class="badge" style="background:#fff3cd;color:#856404;">🔁 ${n}ª vez</span>`:""} <span style="font-size:12px;color:${hrs>8?"#e74a3b":"#666"};">há ${hrs.toFixed(0)}h úteis</span></div></div>
+          <div style="display:flex;gap:6px;"><button class="btn-dark" onclick="verTicket('${x.t.id}')">Abrir ticket</button>${_podeDevolverCred()?`<button class="btn-success" onclick="abrirDevolverCred('${x.t.id}',${x.i})">↪ Devolver ao Credenciamento</button>`:""}</div>
+        </div>
+        <div class="pend-srv" style="margin-top:10px;"><b>Pendência:</b> ${escHtml(p.descricao)}<div class="ck-quem">acionado por ${escHtml(p.usuario)} — ${formatarData(p.data)}</div></div>
+      </div>`;}).join(""):`<div class="card" style="text-align:center;padding:40px 20px;color:#666;"><div style="font-size:40px;">🎉</div><b>Nenhuma pendência de serviço.</b><div style="font-size:13px;margin-top:4px;">Quando o Credenciamento acionar a Implantação em um serviço, ele aparece aqui.</div></div>`}
+  </div>`;
+};
+
+(function(){const st=document.createElement("style");st.textContent=`
+  .doc-rec-card.pend.ativo{background:#6f42c1;border-color:#6f42c1;box-shadow:0 3px 10px rgba(111,66,193,.3);}
+  .pend-srv{min-width:190px;margin-top:6px;background:#f3eefc;border:1px solid #c9b6ef;border-radius:6px;padding:6px 8px;font-size:11px;color:#3b2475;}
+  .pend-srv button{font-size:10px;padding:4px 8px;margin-top:5px;}
+  .pend-desc{margin-top:2px;color:#1f2937;font-size:12px;}
+  .btn-acionar{margin-top:5px;font-size:10px;padding:3px 8px;background:white;color:#6f42c1;border:1px solid #6f42c1;border-radius:5px;cursor:pointer;}
+  .btn-acionar:hover{background:#6f42c1;color:white;}
+  .pend-aviso{background:#f3eefc;border:1px solid #c9b6ef;color:#3b2475;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:8px;}
+`;document.head.appendChild(st);})();
 
 </script>
 </body>
