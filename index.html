@@ -886,7 +886,7 @@ function mostrarTickets(){
         </select>
       </div>
       <div style="display:flex;gap:10px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" id="filtroMeusTickets" onchange="filtrarTickets()"> Apenas meus tickets</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;"><input type="checkbox" id="filtroMeusTickets" ${_prefMeusTickets()?"checked":""} onchange="_salvarPrefMeusTickets(this.checked);filtrarTickets()"> Apenas meus tickets</label>
         <button class="btn-dark" style="font-size:11px;padding:4px 10px;" onclick="limparFiltros()">✕ Limpar filtros</button>
       </div>
       <div id="listaTickets">${renderListaTickets(lista)}</div>
@@ -921,7 +921,7 @@ function filtrarTickets(){
   const ld=document.getElementById("listaTickets");if(ld)ld.innerHTML=renderListaTickets(lista);
 }
 function filtroRapido(v){const a=document.getElementById("filtroAlerta"),s=document.getElementById("filtroStatus"),b=document.getElementById("buscaTicket"),r=document.getElementById("filtroResponsavel");if(a)a.value=v;if(s)s.value="";if(b)b.value="";if(r)r.value="";filtrarTickets();}
-function limparFiltros(){["buscaTicket","filtroStatus","filtroAlerta","filtroResponsavel"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});const m=document.getElementById("filtroMeusTickets");if(m)m.checked=false;filtrarTickets();}
+function limparFiltros(){["buscaTicket","filtroStatus","filtroAlerta","filtroResponsavel"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});filtrarTickets();}
 
 function renderListaTickets(lista){
   if(!lista.length)return'<p style="color:#999;text-align:center;padding:30px 0;">Nenhum ticket encontrado.</p>';
@@ -2876,7 +2876,7 @@ async function confirmarDesmarcarFin(){
    FILTRO RÁPIDO / LIMPAR
    ============================================================ */
 function filtroRapido(v){const a=document.getElementById("filtroAlerta"),s=document.getElementById("filtroStatus"),b=document.getElementById("buscaTicket"),r=document.getElementById("filtroResponsavel");if(a)a.value=v;if(s)s.value="";if(b)b.value="";if(r)r.value="";filtrarTickets();}
-function limparFiltros(){["buscaTicket","filtroStatus","filtroAlerta","filtroResponsavel"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});const m=document.getElementById("filtroMeusTickets");if(m)m.checked=false;filtrarTickets();}
+function limparFiltros(){["buscaTicket","filtroStatus","filtroAlerta","filtroResponsavel"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});filtrarTickets();}
 
 /* ============================================================
    RENDER LISTA TICKETS
@@ -3236,9 +3236,28 @@ const PERM_GLOBAIS=[
   {id:"cadastros",icone:"📋",label:"Cadastros",desc:"Serviços, setores, usuários, perfis, checklist"},
   {id:"backup",icone:"💾",label:"Backup / Restaurar",desc:""}
 ];
+/* Caixinhas coloridas da tela de Tickets: cada uma pode ser liberada por usuário e por módulo.
+   "f" = chave do filtroRapido do card; "el" = id do card de alerta (faixa branca/colorida do topo). */
+const PERM_CARDS=[
+  {id:"docrecusada",el:"cardDocRecusada",cor:"#e74a3b",label:"Documentação recusada",desc:"Faixa do topo (setor Implantação)"},
+  {id:"pendsrv",el:"cardPendSrv",cor:"#6f42c1",label:"Pendências de serviço",desc:"Faixa do topo (setor Implantação)"},
+  {id:"cobrancas",el:"cardCobrancas",cor:"#fd7e14",label:"Serviços atrasados sem cobrança",desc:"Faixa do topo (setor Implantação)"},
+  {id:"abertos",f:"abertos",cor:"#4e73df",label:"Em Aberto"},
+  {id:"concluidos",f:"concluidos",cor:"#1cc88a",label:"Concluídos"},
+  {id:"em_aberto_cred",f:"em_aberto_cred",cor:"#36b9cc",label:"Em Aberto (Cred.)"},
+  {id:"lib_parcial",f:"lib_parcial",cor:"#fd7e14",label:"Lib. Parcialmente"},
+  {id:"pend_cliente",f:"pend_cliente",cor:"#e91e8c",label:"Pend. Cliente"},
+  {id:"atrasados_sla",f:"atrasados_sla",cor:"#e74a3b",label:"Atrasados SLA"},
+  {id:"comercial_24h",f:"comercial_24h",cor:"#b91c1c",label:"Comercial 24h"},
+  {id:"sem_iniciar_24",f:"sem_iniciar_24",cor:"#c0392b",label:"Cred. 24h s/ iniciar"},
+  {id:"alerta_48",f:"alerta_48",cor:"#f6c23e",label:"Aguard. Atualiz.(48h)"},
+  {id:"adquirentes_lib",f:"adquirentes_lib",cor:"#0d6efd",label:"Adquir. Liberadas"}
+];
+function _CK(c){return"card_"+c.id;}
 
-function _permVazia(){const p={cadastros:false,backup:false};MODULOS.forEach(m=>{p[m.id]={};PERM_FUNCOES.forEach(f=>p[m.id][f.id]=false);});return p;}
-function _permCom(mods){const p=_permVazia();Object.keys(mods).forEach(m=>{(mods[m]||[]).forEach(f=>{if(p[m])p[m][f]=true;});});return p;}
+function _permVazia(){const p={cadastros:false,backup:false};MODULOS.forEach(m=>{p[m.id]={};PERM_FUNCOES.forEach(f=>p[m.id][f.id]=false);PERM_CARDS.forEach(c=>p[m.id][_CK(c)]=false);});return p;}
+/* Modelos/legado: quem tem o módulo enxerga todas as caixinhas dele */
+function _permCom(mods){const p=_permVazia();Object.keys(mods).forEach(m=>{if(p[m])PERM_CARDS.forEach(c=>p[m][_CK(c)]=true);(mods[m]||[]).forEach(f=>{if(p[m])p[m][f]=true;});});return p;}
 /* Auxiliar antigo (sem permissões salvas) = comportamento de antes: tudo em Vendas Internas, menos excluir */
 function _permLegado(){return _permCom({interno:["ver","incluir","alterar","servicos","checklist","transferir","encerrar","dashboards","tarefas"]});}
 
@@ -3281,6 +3300,8 @@ function _permsDoUsuario(u){
   if(!p||typeof p!=="object")return _permLegado();
   base.cadastros=!!p.cadastros;base.backup=!!p.backup;
   MODULOS.forEach(m=>PERM_FUNCOES.forEach(f=>{base[m.id][f.id]=!!(p[m.id]&&p[m.id][f.id]);}));
+  /* Caixinhas: usuários salvos antes desta opção (sem a chave) continuam vendo todas */
+  MODULOS.forEach(m=>PERM_CARDS.forEach(c=>{const k=_CK(c),v=p[m.id]?p[m.id][k]:undefined;base[m.id][k]=v===undefined?true:!!v;}));
   return base;
 }
 function _pode(perm,mod){
@@ -3332,6 +3353,7 @@ function ticketsVisiveis(){
   .perm-table .perm-sep td{background:#f4f6fb;font-weight:700;font-size:11px;color:#555;}
   .perm-table a{font-size:10px;font-weight:400;color:#4e73df;cursor:pointer;text-decoration:underline;}
   .perm-adm{padding:10px 12px;font-size:12px;color:#4e73df;}
+  .perm-cor{display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
   .ck-box{border:2px solid #6c757d;border-radius:10px;padding:12px 14px;background:#f8f9fa;margin-bottom:4px;}
   .ck-box.ok{border-color:#1cc88a;background:#f0faf4;}
   .ck-top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px;}
@@ -3823,6 +3845,8 @@ function _renderMatriz(prefix,perms){
   const p=perms||_permVazia();
   return`<table class="perm-table"><thead><tr><th>Função</th>${MODULOS.map(m=>`<th style="color:${m.cor};">${m.icone} ${m.nome}<br><a onclick="_permTodos('${prefix}','${m.id}')">marcar/desmarcar todos</a></th>`).join("")}</tr></thead><tbody>
     ${PERM_FUNCOES.map(f=>`<tr><td>${f.icone} ${f.label}${f.desc?`<div class="perm-desc">${f.desc}</div>`:""}</td>${MODULOS.map(m=>`<td><input type="checkbox" id="perm-${prefix}-${m.id}-${f.id}" ${p[m.id]&&p[m.id][f.id]?"checked":""} onchange="_permMudou('${prefix}')"></td>`).join("")}</tr>`).join("")}
+    <tr class="perm-sep"><td>🟦 Caixinhas da tela de Tickets</td>${MODULOS.map(m=>`<td><a onclick="_permCardsTodos('${prefix}','${m.id}')">marcar/desmarcar todas</a></td>`).join("")}</tr>
+    ${PERM_CARDS.map(c=>`<tr><td><span class="perm-cor" style="background:${c.cor};"></span>${c.label}${c.desc?`<div class="perm-desc">${c.desc}</div>`:""}</td>${MODULOS.map(m=>`<td><input type="checkbox" id="perm-${prefix}-${m.id}-${_CK(c)}" ${p[m.id]&&p[m.id][_CK(c)]?"checked":""} onchange="_permMudou('${prefix}')"></td>`).join("")}</tr>`).join("")}
     <tr class="perm-sep"><td colspan="${MODULOS.length+1}">Geral (vale para os dois módulos)</td></tr>
     ${PERM_GLOBAIS.map(g=>`<tr><td>${g.icone} ${g.label}${g.desc?`<div class="perm-desc">${g.desc}</div>`:""}</td><td colspan="${MODULOS.length}"><input type="checkbox" id="perm-${prefix}-g-${g.id}" ${p[g.id]?"checked":""} onchange="_permMudou('${prefix}')"></td></tr>`).join("")}
   </tbody></table>`;
@@ -3830,15 +3854,21 @@ function _renderMatriz(prefix,perms){
 function _lerMatriz(prefix){
   const p=_permVazia();
   MODULOS.forEach(m=>PERM_FUNCOES.forEach(f=>{const c=document.getElementById(`perm-${prefix}-${m.id}-${f.id}`);p[m.id][f.id]=!!(c&&c.checked);}));
+  MODULOS.forEach(m=>PERM_CARDS.forEach(k=>{const c=document.getElementById(`perm-${prefix}-${m.id}-${_CK(k)}`);p[m.id][_CK(k)]=!!(c&&c.checked);}));
   PERM_GLOBAIS.forEach(g=>{const c=document.getElementById(`perm-${prefix}-g-${g.id}`);p[g.id]=!!(c&&c.checked);});
   return p;
 }
 function _preencherMatriz(prefix,perms){
   MODULOS.forEach(m=>PERM_FUNCOES.forEach(f=>{const c=document.getElementById(`perm-${prefix}-${m.id}-${f.id}`);if(c)c.checked=!!(perms[m.id]&&perms[m.id][f.id]);}));
+  MODULOS.forEach(m=>PERM_CARDS.forEach(k=>{const c=document.getElementById(`perm-${prefix}-${m.id}-${_CK(k)}`);if(c)c.checked=!!(perms[m.id]&&perms[m.id][_CK(k)]);}));
   PERM_GLOBAIS.forEach(g=>{const c=document.getElementById(`perm-${prefix}-g-${g.id}`);if(c)c.checked=!!perms[g.id];});
 }
 window._permTodos=function(prefix,mod){
   const cs=PERM_FUNCOES.map(f=>document.getElementById(`perm-${prefix}-${mod}-${f.id}`)).filter(Boolean);
+  const todos=cs.every(c=>c.checked);cs.forEach(c=>c.checked=!todos);_permMudou(prefix);
+};
+window._permCardsTodos=function(prefix,mod){
+  const cs=PERM_CARDS.map(k=>document.getElementById(`perm-${prefix}-${mod}-${_CK(k)}`)).filter(Boolean);
   const todos=cs.every(c=>c.checked);cs.forEach(c=>c.checked=!todos);_permMudou(prefix);
 };
 window._permMudou=function(prefix){const s=document.getElementById("permtpl-"+prefix);if(s)s.value="";};
@@ -4526,6 +4556,42 @@ window.mostrarPendSrv=function(){
   .btn-acionar:hover{background:#6f42c1;color:white;}
   .pend-aviso{background:#f3eefc;border:1px solid #c9b6ef;color:#3b2475;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:8px;}
 `;document.head.appendChild(st);})();
+
+/* ---------------- "Apenas meus tickets" lembrado por usuário ----------------
+   Fica salvo no cadastro do usuário (vale em qualquer computador) e também neste
+   navegador. Só muda quando o próprio usuário marca/desmarca o checkbox. */
+function _prefMeusTicketsChave(){return"crm_meusTickets_"+((usuarioLogado&&(usuarioLogado._id||usuarioLogado.nome))||"");}
+function _prefMeusTickets(){
+  if(!usuarioLogado)return false;
+  if(typeof usuarioLogado.prefMeusTickets==="boolean")return usuarioLogado.prefMeusTickets;
+  try{return localStorage.getItem(_prefMeusTicketsChave())==="1";}catch(e){return false;}
+}
+window._salvarPrefMeusTickets=function(v){
+  if(!usuarioLogado)return;v=!!v;
+  usuarioLogado.prefMeusTickets=v;
+  const u=usuarios.find(x=>x._id&&x._id===usuarioLogado._id);if(u)u.prefMeusTickets=v;
+  try{localStorage.setItem(_prefMeusTicketsChave(),v?"1":"0");}catch(e){}
+  if(usuarioLogado._id){try{db.collection("usuarios").doc(usuarioLogado._id).set({prefMeusTickets:v},{merge:true}).catch(e=>console.error(e));}catch(e){console.error(e);}}
+};
+
+/* ---------------- Caixinhas liberadas por usuário ----------------
+   Esconde na tela de Tickets as caixinhas que o usuário não tem marcadas
+   em Cadastros → Usuários. Roda sempre que o conteúdo é redesenhado. */
+function _aplicarCardsVisiveis(){
+  const cont=document.getElementById("conteudo");if(!cont||!usuarioLogado)return;
+  PERM_CARDS.forEach(c=>{
+    const ok=_pode(_CK(c));
+    const els=c.el?[document.getElementById(c.el)]:cont.querySelectorAll(`.resumo-card[onclick="filtroRapido('${c.f}')"]`);
+    els.forEach(e=>{if(e&&cont.contains(e))e.style.display=ok?"":"none";});
+  });
+  cont.querySelectorAll(".resumo-grid").forEach(g=>{
+    const algum=[...g.children].some(ch=>ch.style.display!=="none");
+    g.style.display=algum?"":"none";
+  });
+}
+(function(){const cont=document.getElementById("conteudo");if(!cont||!window.MutationObserver)return;
+  new MutationObserver(()=>{try{_aplicarCardsVisiveis();}catch(e){console.error(e);}}).observe(cont,{childList:true,subtree:true});
+})();
 
 </script>
 </body>
