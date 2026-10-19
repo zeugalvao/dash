@@ -538,6 +538,7 @@ async function login(){
     carregarDadosFirebase().then(()=>{if(_dadosCarregados)login();});return;}
   const u=usuarios.find(x=>(x.nome||"").trim().toLowerCase()===nome.toLowerCase()&&(x.senha||"")===senha);
   if(!u){err.style.display="block";err.textContent="⚠ Usuário ou senha incorretos.";document.getElementById("loginPassword").value="";return;}
+  if(u.inativo){err.style.display="block";err.textContent="⚠ Usuário inativo. Procure um administrador.";document.getElementById("loginPassword").value="";return;}
   if(u.totpSecret){
     const token=(document.getElementById("loginToken").value||"").trim();
     if(!token){err.style.display="block";err.textContent="⚠ Informe o código do autenticador (6 dígitos).";document.getElementById("loginToken").focus();return;}
@@ -3912,7 +3913,7 @@ window.abaUsuarios=function(){
     if(badge&&u.perfilAcesso)badge.textContent=u.perfilAcesso;});
 };
 window.salvarUsuario=async function(u){try{
-  const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||"",totpSecret:u.totpSecret||"",permissoes:u.permissoes||null,perfilAcesso:u.perfilAcesso||"",trocarSenha:!!u.trocarSenha,setoresAcesso:Array.isArray(u.setoresAcesso)?u.setoresAcesso:null,senhaAlteradaEm:u.senhaAlteradaEm||"",senhaResetadaEm:u.senhaResetadaEm||"",senhaResetadaPor:u.senhaResetadaPor||""};
+  const d={nome:u.nome||"",perfil:u.perfil||"auxiliar",setor:u.setor||"",senha:u.senha||"",email:u.email||"",totpSecret:u.totpSecret||"",permissoes:u.permissoes||null,perfilAcesso:u.perfilAcesso||"",trocarSenha:!!u.trocarSenha,setoresAcesso:Array.isArray(u.setoresAcesso)?u.setoresAcesso:null,senhaAlteradaEm:u.senhaAlteradaEm||"",senhaResetadaEm:u.senhaResetadaEm||"",senhaResetadaPor:u.senhaResetadaPor||"",inativo:!!u.inativo,inativadoEm:u.inativadoEm||"",inativadoPor:u.inativadoPor||""};
   if(u._id){await db.collection("usuarios").doc(u._id).set(d,{merge:true});}else{const r=await db.collection("usuarios").add(d);u._id=r.id;}
 }catch(e){console.error(e);}};
 window.addUsuario=async function(){
@@ -4556,6 +4557,69 @@ window.mostrarPendSrv=function(){
   .btn-acionar:hover{background:#6f42c1;color:white;}
   .pend-aviso{background:#f3eefc;border:1px solid #c9b6ef;color:#3b2475;border-radius:6px;padding:8px 10px;font-size:12px;margin-bottom:8px;}
 `;document.head.appendChild(st);})();
+
+/* ---------------- Inativar / reativar usuário ----------------
+   Usuário inativo não consegue entrar no CRM. Se estiver logado no momento,
+   é desconectado na hora. Nada é apagado: tickets e histórico continuam. */
+(function(){const st=document.createElement("style");st.textContent=`
+  .user-inativo{background:#f3f4f6!important;border-color:#d1d5db!important;}
+  .user-inativo input,.user-inativo select,.user-inativo .perm-wrap,.user-inativo .setor-acc{opacity:.6;}
+  .badge-inativo{display:inline-block;background:#6c757d;color:#fff;font-size:11px;font-weight:700;padding:2px 9px;border-radius:12px;margin-left:6px;}
+  .user-inativo-info{font-size:11px;color:#6c757d;margin-left:4px;}
+  .btn-inativar{background:#6c757d;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;}
+  .btn-reativar{background:#1cc88a;color:#fff;border:none;border-radius:6px;padding:6px 12px;cursor:pointer;font-size:12px;}
+`;document.head.appendChild(st);})();
+
+const _abaUsuariosInatOrig=window.abaUsuarios;
+window.abaUsuarios=function(){
+  _abaUsuariosInatOrig.apply(this,arguments);
+  const box=document.getElementById("abaConteudo");if(!box)return;
+  const ativos=usuarios.filter(u=>!u.inativo).length;
+  const tit=[...box.querySelectorAll("div")].find(d=>d.textContent.startsWith("Usuários cadastrados"));
+  if(tit)tit.textContent=`Usuários cadastrados (${usuarios.length}) — ${ativos} ativo(s), ${usuarios.length-ativos} inativo(s):`;
+  usuarios.forEach((u,i)=>{
+    const b=box.querySelector(`button[onclick="salvarEdicaoUsuario(${i})"]`);if(!b)return;
+    const card=b.closest('div[style*="border:1px solid #e3e6f0"]');
+    const proprio=usuarioLogado&&u._id&&u._id===usuarioLogado._id;
+    if(!proprio)b.parentElement.insertAdjacentHTML("beforeend",u.inativo
+      ?`<button class="btn-reativar" onclick="alternarAtivoUsuario(${i})">✅ Reativar usuário</button>`
+      :`<button class="btn-inativar" onclick="alternarAtivoUsuario(${i})">🚫 Inativar usuário</button>`);
+    if(u.inativo&&card){
+      card.classList.add("user-inativo");
+      const nome=card.querySelector("b");
+      if(nome)nome.insertAdjacentHTML("afterend",`<span class="badge-inativo">INATIVO</span>${u.inativadoEm?`<span class="user-inativo-info">desde ${formatarData(u.inativadoEm)}${u.inativadoPor?` por ${escHtml(u.inativadoPor)}`:""}</span>`:""}`);
+    }
+  });
+};
+window.alternarAtivoUsuario=async function(i){
+  const u=usuarios[i];if(!u)return;
+  if(usuarioLogado&&u._id===usuarioLogado._id){alert("Você não pode inativar o seu próprio usuário.");return;}
+  if(!u.inativo){
+    if(u.perfil==="adm"&&usuarios.filter(x=>x.perfil==="adm"&&!x.inativo).length<=1){alert("Este é o único ADM ativo. Cadastre ou reative outro ADM antes de inativá-lo.");return;}
+    if(!confirm(`Inativar "${u.nome}"?\n\nEle não vai conseguir entrar no CRM e, se estiver usando agora, será desconectado. Os tickets e o histórico dele continuam.`))return;
+    u.inativo=true;u.inativadoEm=agora();u.inativadoPor=usuarioLogado?usuarioLogado.nome:"";
+  }else{
+    if(!confirm(`Reativar "${u.nome}"? Ele volta a entrar no CRM com a mesma senha e os mesmos acessos.`))return;
+    u.inativo=false;u.inativadoEm="";u.inativadoPor="";
+  }
+  try{
+    if(u._id)await db.collection("usuarios").doc(u._id).set({inativo:u.inativo,inativadoEm:u.inativadoEm,inativadoPor:u.inativadoPor},{merge:true});
+    else await salvarUsuario(u);
+  }catch(e){console.error(e);alert("Não foi possível salvar. Verifique a conexão.");return;}
+  abaUsuarios();
+};
+
+/* Se o usuário logado for inativado, é desconectado na hora */
+const _atualizarTelaInatOrig=window._atualizarTelaAtual;
+window._atualizarTelaAtual=function(){
+  if(usuarioLogado&&usuarioLogado.inativo){
+    logout();
+    const err=document.getElementById("loginError");
+    if(err){err.style.display="block";err.textContent="⚠ Seu usuário foi inativado. Procure um administrador.";}
+    return;
+  }
+  return _atualizarTelaInatOrig.apply(this,arguments);
+};
 
 /* ---------------- "Apenas meus tickets" lembrado por usuário ----------------
    Fica salvo no cadastro do usuário (vale em qualquer computador) e também neste
