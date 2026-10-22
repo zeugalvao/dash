@@ -3371,6 +3371,8 @@ function ticketsVisiveis(){
   .ck-item{align-items:center;}
   .ck-btns{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
   .ck-btns button{font-size:11px;padding:5px 9px;margin:0;}
+  .ck-naousa{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#6f42c1;border:1px solid #6f42c1;background:#f3edfc;border-radius:6px;padding:4px 8px;cursor:pointer;white-space:nowrap;user-select:none;}
+  .ck-naousa input{margin:0;width:auto;cursor:pointer;accent-color:#6f42c1;}
   .ck-motivo{border:1px solid;border-radius:6px;padding:6px 9px;margin-top:5px;font-size:12px;}
   .doc-rec-card{display:flex;align-items:center;gap:14px;border-radius:10px;padding:12px 16px;margin-bottom:12px;cursor:pointer;background:white;border:2px solid #e3e6f0;color:#6c757d;}
   .doc-rec-card.ativo{background:#e74a3b;border-color:#e74a3b;color:white;box-shadow:0 3px 10px rgba(231,74,59,.3);}
@@ -3526,6 +3528,8 @@ window.salvarNovoTicket=async function(){
 /* ---------------- Ticket aberto: checklist + restrições ---------------- */
 function _ckStatus(it){return it&&(it.status||(it.marcado?"aprovado":"pendente"));}
 function _ckItens(t){return(t&&t.checklistInicio)||[];}
+/* "Não vai usar" conta como aprovado para o checklist/SLA */
+function _ckOk(it){const s=_ckStatus(it);return s==="aprovado"||s==="nao_usa";}
 function _ticketFechado(t){return["Concluído","Encerrado","Cancelado"].includes(t.status);}
 function _ticketTemRecusa(t){return _ckItens(t).some(i=>_ckStatus(i)==="recusado");}
 function _podeCorrigir(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehImplantacao(_setorAtual)&&_setoresDoUsuario().some(_ehImplantacao)));}
@@ -3534,11 +3538,12 @@ const CK_ST={
   pendente:{cor:"#6c757d",bg:"#f1f3f5",txt:"Pendente"},
   aprovado:{cor:"#1cc88a",bg:"#e8f8f1",txt:"✔ Aprovado"},
   recusado:{cor:"#e74a3b",bg:"#fdecea",txt:"✖ Recusado"},
-  corrigido:{cor:"#4e73df",bg:"#e8f0ff",txt:"🔁 Corrigido — reanalisar"}
+  corrigido:{cor:"#4e73df",bg:"#e8f0ff",txt:"🔁 Corrigido — reanalisar"},
+  nao_usa:{cor:"#6f42c1",bg:"#f3edfc",txt:"🚫 Não vai usar"}
 };
 function _renderChecklist(t){
   if(!t.checklistObrigatorio)return"";
-  const itens=_ckItens(t);const aprov=itens.filter(i=>_ckStatus(i)==="aprovado").length;
+  const itens=_ckItens(t);const aprov=itens.filter(_ckOk).length;
   const nRec=itens.filter(i=>_ckStatus(i)==="recusado").length,nCor=itens.filter(i=>_ckStatus(i)==="corrigido").length;
   const ok=!!t.slaInicio;const pode=_pode("checklist",_modTicket(t));const podeCor=_podeCorrigir(t);
   const isAdm=usuarioLogado.perfil==="adm";
@@ -3558,11 +3563,13 @@ function _renderChecklist(t){
       if(st==="aprovado")detalhe=`<div class="ck-quem">✔ Aprovado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div>`;
       if(st==="recusado")detalhe=`<div class="ck-motivo" style="border-color:#e74a3b;background:#fdecea;color:#842029;"><b>Motivo:</b> ${escHtml(it.motivo||"")}<div class="ck-quem">Recusado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div></div>`;
       if(st==="corrigido")detalhe=`<div class="ck-motivo" style="border-color:#4e73df;background:#e8f0ff;color:#1e3a8a;">Último motivo: <i>${escHtml(it.motivo||"")}</i>${it.obsCorrecao?`<br><b>Correção:</b> ${escHtml(it.obsCorrecao)}`:""}<div class="ck-quem">Corrigido por ${escHtml(it.corrigidoPor||"")} — ${formatarData(it.corrigidoEm)}${it.emailEnviadoPara?` · reenviado para ${escHtml(it.emailEnviadoPara)}`:""}</div></div>`;
+      if(st==="nao_usa")detalhe=`<div class="ck-quem">🚫 Marcado como "não vai usar" por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div>`;
       const btns=[];
-      if(!ok&&pode&&st!=="aprovado")btns.push(`<button class="btn-success" onclick="aprovarItemChecklist('${t.id}',${i})">✔ Aprovar</button>`);
-      if(!ok&&pode&&st!=="recusado"&&st!=="aprovado")btns.push(`<button class="btn-danger" onclick="abrirRecusarItem('${t.id}',${i})">✖ Recusar</button>`);
+      if(!ok&&pode&&st!=="aprovado"&&st!=="nao_usa")btns.push(`<button class="btn-success" onclick="aprovarItemChecklist('${t.id}',${i})">✔ Aprovar</button>`);
+      if(!ok&&pode&&st!=="recusado"&&st!=="aprovado"&&st!=="nao_usa")btns.push(`<button class="btn-danger" onclick="abrirRecusarItem('${t.id}',${i})">✖ Recusar</button>`);
       if(!ok&&podeCor&&st==="recusado")btns.push(`<button class="btn-primary" onclick="abrirCorrigirItem('${t.id}',${i})">✅ Corrigido</button>`);
       if(!ok&&pode&&st==="aprovado")btns.push(`<button class="btn-dark" style="font-size:10px;padding:3px 7px;" onclick="desfazerItemChecklist('${t.id}',${i})">↩ desfazer</button>`);
+      if(st!=="aprovado"&&(st==="nao_usa"||(!ok&&pode)))btns.push(`<label class="ck-naousa" title="O cliente não vai usar esta documentação — conta como aprovado"><input type="checkbox" ${st==="nao_usa"?"checked":""} ${ok||!pode?"disabled":""} onchange="marcarNaoVaiUsar('${t.id}',${i},this)"> NÃO VAI USAR</label>`);
       return`<div class="ck-item">
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="font-weight:600;">${escHtml(it.texto)}</span>
@@ -3572,7 +3579,7 @@ function _renderChecklist(t){
         </div>
         <div class="ck-btns">${btns.join("")}</div>
       </div>`;}).join("")}
-    ${!ok?`<div style="font-size:11px;color:#6c757d;margin-top:6px;">O SLA começa quando todos os itens estiverem aprovados. Até lá, os serviços não podem ser iniciados, assinados ou finalizados.${pode?"":" Seu perfil não pode aprovar ou recusar itens."}</div>`:""}
+    ${!ok?`<div style="font-size:11px;color:#6c757d;margin-top:6px;">O SLA começa quando todos os itens estiverem aprovados (ou marcados como “não vai usar”). Até lá, os serviços não podem ser iniciados, assinados ou finalizados.${pode?"":" Seu perfil não pode aprovar ou recusar itens."}</div>`:""}
     ${ok&&isAdm?`<div style="margin-top:8px;"><button class="btn-dark" style="font-size:11px;" onclick="reabrirChecklist('${t.id}')">↩ Reabrir checklist (ADM)</button></div>`:""}
   </div>`;
 }
@@ -3636,12 +3643,33 @@ window.aprovarItemChecklist=async function(id,i){
   const a=_ckAlvo(id,i);if(!a)return;
   if(!_pode("checklist",_modTicket(a.t))){_negar("aprovar checklist");return;}
   if(a.t.slaInicio)return;
-  const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckStatus(x)==="aprovado");
+  const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckOk(x));
   if(vaiConcluir&&!confirm("Este é o último item. Ao aprovar, o checklist fica concluído e o SLA dos serviços começa a contar agora. Confirmar?"))return;
   const agr=agora();Object.assign(a.it,{status:"aprovado",marcado:true,usuario:usuarioLogado.nome,data:agr});
   _ckEvento(a.it,"aprovado");
   _logHistorico(a.idx,`Checklist: "${a.it.texto}" APROVADO${a.it.recusas?` (após ${a.it.recusas} devolução(ões))`:""}`);
   if(vaiConcluir){a.t.slaInicio=agr;a.t.checklistConcluidoPor=usuarioLogado.nome;_logHistorico(a.idx,"✅ Checklist de início concluído — SLA dos serviços começou a contar");}
+  await _ckSalvar(a);
+};
+window.marcarNaoVaiUsar=async function(id,i,el){
+  const a=_ckAlvo(id,i);if(!a||a.t.slaInicio){if(el)el.checked=!el.checked;return;}
+  if(!_pode("checklist",_modTicket(a.t))){if(el)el.checked=!el.checked;_negar("alterar checklist");return;}
+  const marcar=_ckStatus(a.it)!=="nao_usa";
+  if(marcar){
+    const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckOk(x));
+    if(vaiConcluir&&!confirm("Este é o último item. Ao marcar \"não vai usar\", o checklist fica concluído e o SLA dos serviços começa a contar agora. Confirmar?")){if(el)el.checked=false;return;}
+    const agr=agora();
+    Object.assign(a.it,{statusAntesNaoUsa:_ckStatus(a.it),usuarioAntesNaoUsa:a.it.usuario||"",dataAntesNaoUsa:a.it.data||"",status:"nao_usa",marcado:true,usuario:usuarioLogado.nome,data:agr});
+    _ckEvento(a.it,"não vai usar");
+    _logHistorico(a.idx,`Checklist: "${a.it.texto}" marcado como NÃO VAI USAR (conta como aprovado)`);
+    if(vaiConcluir){a.t.slaInicio=agr;a.t.checklistConcluidoPor=usuarioLogado.nome;_logHistorico(a.idx,"✅ Checklist de início concluído — SLA dos serviços começou a contar");}
+  }else{
+    const ant=a.it.statusAntesNaoUsa;
+    const volta=ant&&ant!=="nao_usa"&&ant!=="aprovado"?ant:(a.it.recusas?"corrigido":"pendente");
+    Object.assign(a.it,{status:volta,marcado:false,usuario:volta==="recusado"?(a.it.usuarioAntesNaoUsa||""):"",data:volta==="recusado"?(a.it.dataAntesNaoUsa||""):"",statusAntesNaoUsa:"",usuarioAntesNaoUsa:"",dataAntesNaoUsa:""});
+    _ckEvento(a.it,"\"não vai usar\" desmarcado");
+    _logHistorico(a.idx,`Checklist: "não vai usar" de "${a.it.texto}" desmarcado`);
+  }
   await _ckSalvar(a);
 };
 window.desfazerItemChecklist=async function(id,i){
@@ -3834,7 +3862,7 @@ window.renderListaTickets=function(lista){
     if(_ehImplantacao(_setorAtual)){const nA=_srvAtrasadosSemCobranca(t).length;if(nA)h=h.replace(marca,marca+`<span class="badge" style="background:#fd7e14;color:white;">📣 ${nA} atrasado(s) sem cobrança</span>`);}
     if(_checklistPendente(t)&&!_ticketFechado(t)){const its=_ckItens(t);
       const nR=its.filter(i=>_ckStatus(i)==="recusado").length,nC=its.filter(i=>_ckStatus(i)==="corrigido").length;
-      let b=`<span class="badge" style="background:#6c757d;color:white;">☑️ Checklist ${its.filter(i=>_ckStatus(i)==="aprovado").length}/${its.length} · SLA pausado</span>`;
+      let b=`<span class="badge" style="background:#6c757d;color:white;">☑️ Checklist ${its.filter(_ckOk).length}/${its.length} · SLA pausado</span>`;
       if(nR)b+=`<span class="badge" style="background:#e74a3b;color:white;">⛔ Doc. recusada (${nR})</span>`;
       if(nC)b+=`<span class="badge" style="background:#4e73df;color:white;">🔁 Doc. corrigida — reanalisar (${nC})</span>`;
       h=h.replace(marca,marca+b);}
