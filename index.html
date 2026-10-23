@@ -3241,7 +3241,8 @@ const PERM_GLOBAIS=[
    "f" = chave do filtroRapido do card; "el" = id do card de alerta (faixa branca/colorida do topo). */
 const PERM_CARDS=[
   {id:"docrecusada",el:"cardDocRecusada",cor:"#e74a3b",label:"Documentação recusada",desc:"Faixa do topo (setor Implantação)"},
-  {id:"pendsrv",el:"cardPendSrv",cor:"#6f42c1",label:"Pendências de serviço",desc:"Faixa do topo (setor Implantação)"},
+  {id:"pendsrv",el:"cardPendSrv",cor:"#6f42c1",label:"Cobrado pelo Credenciamento",desc:"Faixa do topo (setor Implantação)"},
+  {id:"cobradoimpl",el:"cardCobradoImpl",cor:"#fd7e14",label:"Cobrado pela Implantação",desc:"Faixa do topo (setor Credenciamento)"},
   {id:"cobrancas",el:"cardCobrancas",cor:"#fd7e14",label:"Serviços atrasados sem cobrança",desc:"Faixa do topo (setor Implantação)"},
   {id:"abertos",f:"abertos",cor:"#4e73df",label:"Em Aberto"},
   {id:"concluidos",f:"concluidos",cor:"#1cc88a",label:"Concluídos"},
@@ -3371,8 +3372,6 @@ function ticketsVisiveis(){
   .ck-item{align-items:center;}
   .ck-btns{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end;}
   .ck-btns button{font-size:11px;padding:5px 9px;margin:0;}
-  .ck-naousa{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;color:#6f42c1;border:1px solid #6f42c1;background:#f3edfc;border-radius:6px;padding:4px 8px;cursor:pointer;white-space:nowrap;user-select:none;}
-  .ck-naousa input{margin:0;width:auto;cursor:pointer;accent-color:#6f42c1;}
   .ck-motivo{border:1px solid;border-radius:6px;padding:6px 9px;margin-top:5px;font-size:12px;}
   .doc-rec-card{display:flex;align-items:center;gap:14px;border-radius:10px;padding:12px 16px;margin-bottom:12px;cursor:pointer;background:white;border:2px solid #e3e6f0;color:#6c757d;}
   .doc-rec-card.ativo{background:#e74a3b;border-color:#e74a3b;color:white;box-shadow:0 3px 10px rgba(231,74,59,.3);}
@@ -3468,6 +3467,7 @@ window._atualizarTelaAtual=function(){
   if(_telaAtual==="docrecusada"){try{mostrarDocRecusada();}catch(e){}return;}
   if(_telaAtual==="cobrancas"){try{mostrarCobrancas();}catch(e){}return;}
   if(_telaAtual==="pendsrv"){try{mostrarPendSrv();}catch(e){}return;}
+  if(_telaAtual==="cobradoimpl"){try{mostrarCobradoImpl();}catch(e){}return;}
   if(_telaAtual==="inicio"){try{_telaInicial();}catch(e){}return;}
   return _atualizarTelaOrig.apply(this,arguments);
 };
@@ -3528,8 +3528,6 @@ window.salvarNovoTicket=async function(){
 /* ---------------- Ticket aberto: checklist + restrições ---------------- */
 function _ckStatus(it){return it&&(it.status||(it.marcado?"aprovado":"pendente"));}
 function _ckItens(t){return(t&&t.checklistInicio)||[];}
-/* "Não vai usar" conta como aprovado para o checklist/SLA */
-function _ckOk(it){const s=_ckStatus(it);return s==="aprovado"||s==="nao_usa";}
 function _ticketFechado(t){return["Concluído","Encerrado","Cancelado"].includes(t.status);}
 function _ticketTemRecusa(t){return _ckItens(t).some(i=>_ckStatus(i)==="recusado");}
 function _podeCorrigir(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehImplantacao(_setorAtual)&&_setoresDoUsuario().some(_ehImplantacao)));}
@@ -3538,12 +3536,11 @@ const CK_ST={
   pendente:{cor:"#6c757d",bg:"#f1f3f5",txt:"Pendente"},
   aprovado:{cor:"#1cc88a",bg:"#e8f8f1",txt:"✔ Aprovado"},
   recusado:{cor:"#e74a3b",bg:"#fdecea",txt:"✖ Recusado"},
-  corrigido:{cor:"#4e73df",bg:"#e8f0ff",txt:"🔁 Corrigido — reanalisar"},
-  nao_usa:{cor:"#6f42c1",bg:"#f3edfc",txt:"🚫 Não vai usar"}
+  corrigido:{cor:"#4e73df",bg:"#e8f0ff",txt:"🔁 Corrigido — reanalisar"}
 };
 function _renderChecklist(t){
   if(!t.checklistObrigatorio)return"";
-  const itens=_ckItens(t);const aprov=itens.filter(_ckOk).length;
+  const itens=_ckItens(t);const aprov=itens.filter(i=>_ckStatus(i)==="aprovado").length;
   const nRec=itens.filter(i=>_ckStatus(i)==="recusado").length,nCor=itens.filter(i=>_ckStatus(i)==="corrigido").length;
   const ok=!!t.slaInicio;const pode=_pode("checklist",_modTicket(t));const podeCor=_podeCorrigir(t);
   const isAdm=usuarioLogado.perfil==="adm";
@@ -3563,13 +3560,11 @@ function _renderChecklist(t){
       if(st==="aprovado")detalhe=`<div class="ck-quem">✔ Aprovado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div>`;
       if(st==="recusado")detalhe=`<div class="ck-motivo" style="border-color:#e74a3b;background:#fdecea;color:#842029;"><b>Motivo:</b> ${escHtml(it.motivo||"")}<div class="ck-quem">Recusado por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div></div>`;
       if(st==="corrigido")detalhe=`<div class="ck-motivo" style="border-color:#4e73df;background:#e8f0ff;color:#1e3a8a;">Último motivo: <i>${escHtml(it.motivo||"")}</i>${it.obsCorrecao?`<br><b>Correção:</b> ${escHtml(it.obsCorrecao)}`:""}<div class="ck-quem">Corrigido por ${escHtml(it.corrigidoPor||"")} — ${formatarData(it.corrigidoEm)}${it.emailEnviadoPara?` · reenviado para ${escHtml(it.emailEnviadoPara)}`:""}</div></div>`;
-      if(st==="nao_usa")detalhe=`<div class="ck-quem">🚫 Marcado como "não vai usar" por ${escHtml(it.usuario||"")} — ${formatarData(it.data)}</div>`;
       const btns=[];
-      if(!ok&&pode&&st!=="aprovado"&&st!=="nao_usa")btns.push(`<button class="btn-success" onclick="aprovarItemChecklist('${t.id}',${i})">✔ Aprovar</button>`);
-      if(!ok&&pode&&st!=="recusado"&&st!=="aprovado"&&st!=="nao_usa")btns.push(`<button class="btn-danger" onclick="abrirRecusarItem('${t.id}',${i})">✖ Recusar</button>`);
+      if(!ok&&pode&&st!=="aprovado")btns.push(`<button class="btn-success" onclick="aprovarItemChecklist('${t.id}',${i})">✔ Aprovar</button>`);
+      if(!ok&&pode&&st!=="recusado"&&st!=="aprovado")btns.push(`<button class="btn-danger" onclick="abrirRecusarItem('${t.id}',${i})">✖ Recusar</button>`);
       if(!ok&&podeCor&&st==="recusado")btns.push(`<button class="btn-primary" onclick="abrirCorrigirItem('${t.id}',${i})">✅ Corrigido</button>`);
       if(!ok&&pode&&st==="aprovado")btns.push(`<button class="btn-dark" style="font-size:10px;padding:3px 7px;" onclick="desfazerItemChecklist('${t.id}',${i})">↩ desfazer</button>`);
-      if(st!=="aprovado"&&(st==="nao_usa"||(!ok&&pode)))btns.push(`<label class="ck-naousa" title="O cliente não vai usar esta documentação — conta como aprovado"><input type="checkbox" ${st==="nao_usa"?"checked":""} ${ok||!pode?"disabled":""} onchange="marcarNaoVaiUsar('${t.id}',${i},this)"> NÃO VAI USAR</label>`);
       return`<div class="ck-item">
         <div style="flex:1;min-width:0;">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;"><span style="font-weight:600;">${escHtml(it.texto)}</span>
@@ -3579,7 +3574,7 @@ function _renderChecklist(t){
         </div>
         <div class="ck-btns">${btns.join("")}</div>
       </div>`;}).join("")}
-    ${!ok?`<div style="font-size:11px;color:#6c757d;margin-top:6px;">O SLA começa quando todos os itens estiverem aprovados (ou marcados como “não vai usar”). Até lá, os serviços não podem ser iniciados, assinados ou finalizados.${pode?"":" Seu perfil não pode aprovar ou recusar itens."}</div>`:""}
+    ${!ok?`<div style="font-size:11px;color:#6c757d;margin-top:6px;">O SLA começa quando todos os itens estiverem aprovados. Até lá, os serviços não podem ser iniciados, assinados ou finalizados.${pode?"":" Seu perfil não pode aprovar ou recusar itens."}</div>`:""}
     ${ok&&isAdm?`<div style="margin-top:8px;"><button class="btn-dark" style="font-size:11px;" onclick="reabrirChecklist('${t.id}')">↩ Reabrir checklist (ADM)</button></div>`:""}
   </div>`;
 }
@@ -3594,7 +3589,7 @@ function _aplicarRestricoesSrv(t){
     wrap.querySelectorAll('input[id^="chk_ini_"],input[id^="chk_ass_"],input[id^="chk_fin_"]').forEach(c=>{if(!c.checked){c.disabled=true;c.title="Conclua o checklist de início primeiro";}});
   }
   _marcarPendSrv(t,wrap);
-  if(_ehImplantacao(_setorAtual))_colunaCobranca(t,wrap);
+  if(_ehImplantacao(_setorAtual))_colunaCobranca(t,wrap);else _marcarCobrancaCred(t,wrap);
 }
 function _posProcessarTicket(t){
   const mod=_modTicket(t);const cont=document.getElementById("conteudo");if(!cont)return;
@@ -3643,33 +3638,12 @@ window.aprovarItemChecklist=async function(id,i){
   const a=_ckAlvo(id,i);if(!a)return;
   if(!_pode("checklist",_modTicket(a.t))){_negar("aprovar checklist");return;}
   if(a.t.slaInicio)return;
-  const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckOk(x));
+  const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckStatus(x)==="aprovado");
   if(vaiConcluir&&!confirm("Este é o último item. Ao aprovar, o checklist fica concluído e o SLA dos serviços começa a contar agora. Confirmar?"))return;
   const agr=agora();Object.assign(a.it,{status:"aprovado",marcado:true,usuario:usuarioLogado.nome,data:agr});
   _ckEvento(a.it,"aprovado");
   _logHistorico(a.idx,`Checklist: "${a.it.texto}" APROVADO${a.it.recusas?` (após ${a.it.recusas} devolução(ões))`:""}`);
   if(vaiConcluir){a.t.slaInicio=agr;a.t.checklistConcluidoPor=usuarioLogado.nome;_logHistorico(a.idx,"✅ Checklist de início concluído — SLA dos serviços começou a contar");}
-  await _ckSalvar(a);
-};
-window.marcarNaoVaiUsar=async function(id,i,el){
-  const a=_ckAlvo(id,i);if(!a||a.t.slaInicio){if(el)el.checked=!el.checked;return;}
-  if(!_pode("checklist",_modTicket(a.t))){if(el)el.checked=!el.checked;_negar("alterar checklist");return;}
-  const marcar=_ckStatus(a.it)!=="nao_usa";
-  if(marcar){
-    const vaiConcluir=_ckItens(a.t).every((x,j)=>j===i||_ckOk(x));
-    if(vaiConcluir&&!confirm("Este é o último item. Ao marcar \"não vai usar\", o checklist fica concluído e o SLA dos serviços começa a contar agora. Confirmar?")){if(el)el.checked=false;return;}
-    const agr=agora();
-    Object.assign(a.it,{statusAntesNaoUsa:_ckStatus(a.it),usuarioAntesNaoUsa:a.it.usuario||"",dataAntesNaoUsa:a.it.data||"",status:"nao_usa",marcado:true,usuario:usuarioLogado.nome,data:agr});
-    _ckEvento(a.it,"não vai usar");
-    _logHistorico(a.idx,`Checklist: "${a.it.texto}" marcado como NÃO VAI USAR (conta como aprovado)`);
-    if(vaiConcluir){a.t.slaInicio=agr;a.t.checklistConcluidoPor=usuarioLogado.nome;_logHistorico(a.idx,"✅ Checklist de início concluído — SLA dos serviços começou a contar");}
-  }else{
-    const ant=a.it.statusAntesNaoUsa;
-    const volta=ant&&ant!=="nao_usa"&&ant!=="aprovado"?ant:(a.it.recusas?"corrigido":"pendente");
-    Object.assign(a.it,{status:volta,marcado:false,usuario:volta==="recusado"?(a.it.usuarioAntesNaoUsa||""):"",data:volta==="recusado"?(a.it.dataAntesNaoUsa||""):"",statusAntesNaoUsa:"",usuarioAntesNaoUsa:"",dataAntesNaoUsa:""});
-    _ckEvento(a.it,"\"não vai usar\" desmarcado");
-    _logHistorico(a.idx,`Checklist: "não vai usar" de "${a.it.texto}" desmarcado`);
-  }
   await _ckSalvar(a);
 };
 window.desfazerItemChecklist=async function(id,i){
@@ -3749,6 +3723,7 @@ function _injetarCardDocRecusada(){
   const oc=document.getElementById("cardCobrancas");if(oc)oc.remove();
   _injetarCardPendSrv();
   _injetarCardCobrancas();
+  _injetarCardCobradoImpl();
   if(!_veDocRecusada())return;
   const lista=_docRecusadaTickets();const nItens=lista.reduce((s,t)=>s+_ckItens(t).filter(i=>_ckStatus(i)==="recusado").length,0);
   const ativo=lista.length>0;
@@ -3859,10 +3834,11 @@ window.renderListaTickets=function(lista){
     if(_ehImplantacao(_setorAtual)&&_espelhadoImplantacao(t))h=h.replace(marca,marca+`<span class="badge" style="background:#6f42c1;color:white;">🪞 Espelho · ${escHtml(t.setor)}</span>`);
     {const ps=(t.servicosTicket||[]).filter(_pendAtiva);if(ps.length&&!_ticketFechado(t)){
       h=h.replace(marca,marca+(_ehImplantacao(_setorAtual)?`<span class="badge" style="background:#6f42c1;color:white;">🧩 Pendência: ${ps.map(x=>escHtml(x.nome)).join(", ")}</span>`:`<span class="badge" style="background:#6f42c1;color:white;">↩ ${ps.length} serviço(s) na Implantação</span>`));}}
+    if(_ehCredenciamento(_setorAtual)&&!_ticketFechado(t)){const nC=(t.servicosTicket||[]).filter(_cobrancaPendente).length;if(nC)h=h.replace(marca,marca+`<span class="badge cob-pisca-badge">📣 Cobrado pela Implantação (${nC})</span>`);}
     if(_ehImplantacao(_setorAtual)){const nA=_srvAtrasadosSemCobranca(t).length;if(nA)h=h.replace(marca,marca+`<span class="badge" style="background:#fd7e14;color:white;">📣 ${nA} atrasado(s) sem cobrança</span>`);}
     if(_checklistPendente(t)&&!_ticketFechado(t)){const its=_ckItens(t);
       const nR=its.filter(i=>_ckStatus(i)==="recusado").length,nC=its.filter(i=>_ckStatus(i)==="corrigido").length;
-      let b=`<span class="badge" style="background:#6c757d;color:white;">☑️ Checklist ${its.filter(_ckOk).length}/${its.length} · SLA pausado</span>`;
+      let b=`<span class="badge" style="background:#6c757d;color:white;">☑️ Checklist ${its.filter(i=>_ckStatus(i)==="aprovado").length}/${its.length} · SLA pausado</span>`;
       if(nR)b+=`<span class="badge" style="background:#e74a3b;color:white;">⛔ Doc. recusada (${nR})</span>`;
       if(nC)b+=`<span class="badge" style="background:#4e73df;color:white;">🔁 Doc. corrigida — reanalisar (${nC})</span>`;
       h=h.replace(marca,marca+b);}
@@ -4295,6 +4271,8 @@ function _colunaCobranca(t,wrap){
     }else html=`<span style="font-size:10px;color:#aaa;">${srv.finalizado?.marcado||srv.expirado?.marcado?"—":"no prazo"}</span>`;
     if(ult)html+=`<div class="chk-info"><span class="chk-resp">${escHtml(ult.usuario)}</span><br>${formatarData(ult.data)}</div>`;
     if(n)html+=`<div style="font-size:9px;color:#fd7e14;font-weight:700;margin-top:2px;">📣 ${n} cobrança(s)</div>`;
+    if(ult&&ult.resposta)html+=`<div class="cob-resp-ok" title="${escHtml(ult.resposta.texto)}">✅ Respondido por ${escHtml(ult.resposta.usuario)}<br>${formatarData(ult.resposta.data)}</div>`;
+    else if(ult&&_cobrancaPendente(srv))html+=`<div style="font-size:9px;color:#e74a3b;font-weight:700;margin-top:2px;">⏳ aguardando Credenciamento</div>`;
     if(atras)html+="</div>";
     tds[1].insertAdjacentHTML("afterend",`<td style="text-align:center;${atras&&!rec?"background:#fff4e6;":""}">${html}</td>`);
   });
@@ -4546,11 +4524,11 @@ function _injetarCardPendSrv(){
   if(!_ehImplantacao(_setorAtual))return;
   const cont=document.getElementById("conteudo");if(!cont)return;
   document.getElementById("cardPendSrv")?.remove();
-  const l=_pendSrvLista();
-  const html=`<div id="cardPendSrv" class="doc-rec-card pend ${l.length?"ativo":""}" onclick="mostrarPendSrv()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarPendSrv()">
-    <div class="doc-rec-num">${l.length}</div>
-    <div style="flex:1;min-width:0;"><div class="doc-rec-tit">PENDÊNCIAS DE SERVIÇO</div>
-    <div class="doc-rec-sub">${l.length?`${new Set(l.map(x=>x.t.id)).size} cliente(s) · serviços devolvidos pelo Credenciamento`:"Nenhum serviço devolvido pelo Credenciamento"}</div></div>
+  const l=_pendSrvLista();const nT=new Set(l.map(x=>x.t.id)).size;
+  const html=`<div id="cardPendSrv" class="doc-rec-card pend ${l.length?"ativo pisca":""}" onclick="mostrarPendSrv()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarPendSrv()">
+    <div class="doc-rec-num">${nT}</div>
+    <div style="flex:1;min-width:0;"><div class="doc-rec-tit">📣 COBRADO PELO CREDENCIAMENTO</div>
+    <div class="doc-rec-sub">${l.length?`${nT} ticket(s) · ${l.length} serviço(s) aguardando sua resposta`:"Nenhuma cobrança do Credenciamento"}</div></div>
     <span class="doc-rec-abrir">Abrir</span></div>`;
   const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
   if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
@@ -4562,7 +4540,7 @@ window.mostrarPendSrv=function(){
   const l=_pendSrvLista();
   document.getElementById("conteudo").innerHTML=`<div style="max-width:900px;">
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
-      <button class="btn-dark" onclick="_irInicio()">← Voltar</button><h2 style="margin:0;">🧩 Pendências de serviço</h2>
+      <button class="btn-dark" onclick="_irInicio()">← Voltar</button><h2 style="margin:0;">📣 Cobrado pelo Credenciamento</h2>
       <span style="font-size:13px;color:#888;">devolvidas pelo Credenciamento · ${l.length} serviço(s)</span></div>
     ${l.length?l.map(x=>{const p=x.s.pendImplantacao;const n=(x.s.pendHist||[]).filter(h=>h.acao==="acionado").length;const hrs=horasUteisEntre(p.data,new Date().toISOString());
       return`<div class="card" style="border-left-color:#6f42c1;">
@@ -4572,7 +4550,7 @@ window.mostrarPendSrv=function(){
           <div style="display:flex;gap:6px;"><button class="btn-dark" onclick="verTicket('${x.t.id}')">Abrir ticket</button>${_podeDevolverCred()?`<button class="btn-success" onclick="abrirDevolverCred('${x.t.id}',${x.i})">↪ Devolver ao Credenciamento</button>`:""}</div>
         </div>
         <div class="pend-srv" style="margin-top:10px;"><b>Pendência:</b> ${escHtml(p.descricao)}<div class="ck-quem">acionado por ${escHtml(p.usuario)} — ${formatarData(p.data)}</div></div>
-      </div>`;}).join(""):`<div class="card" style="text-align:center;padding:40px 20px;color:#666;"><div style="font-size:40px;">🎉</div><b>Nenhuma pendência de serviço.</b><div style="font-size:13px;margin-top:4px;">Quando o Credenciamento acionar a Implantação em um serviço, ele aparece aqui.</div></div>`}
+      </div>`;}).join(""):`<div class="card" style="text-align:center;padding:40px 20px;color:#666;"><div style="font-size:40px;">🎉</div><b>Nenhuma cobrança do Credenciamento.</b><div style="font-size:13px;margin-top:4px;">Quando o Credenciamento acionar a Implantação em um serviço, ele aparece aqui.</div></div>`}
   </div>`;
 };
 
@@ -4665,6 +4643,152 @@ window._salvarPrefMeusTickets=function(v){
   try{localStorage.setItem(_prefMeusTicketsChave(),v?"1":"0");}catch(e){}
   if(usuarioLogado._id){try{db.collection("usuarios").doc(usuarioLogado._id).set({prefMeusTickets:v},{merge:true}).catch(e=>console.error(e));}catch(e){console.error(e);}}
 };
+
+
+/* ============================================================
+   COBRADO PELA IMPLANTAÇÃO  (tela do Credenciamento)
+   - Quando a Implantação marca "Cobrado" em um serviço, a última cobrança
+     fica PENDENTE até o Credenciamento responder.
+   - O Credenciamento responde pelo botão "Responder" (no ticket ou na tela
+     da cobrança) ou registrando uma atualização (📝) no próprio serviço.
+   - Card piscando no topo + aviso na hora (tempo real via Firebase).
+   No sentido contrário, o card "COBRADO PELO CREDENCIAMENTO" da Implantação
+   mostra os serviços em que o Credenciamento acionou a Implantação.
+   ============================================================ */
+function _cobrancaPendente(srv){const u=_ultimaCobranca(srv);return!!u&&!u.resposta&&!srv.finalizado?.marcado&&!srv.expirado?.marcado;}
+function _veCobradoImpl(){return!!usuarioLogado&&!!_setorAtual&&_ehCredenciamento(_setorAtual);}
+function _podeResponderCob(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehCredenciamento(_setorAtual)&&_pode("servicos",_modTicket(t))));}
+function _cobradoImplLista(){
+  const r=[];ticketsVisiveis().forEach(t=>{if(_ticketFechado(t))return;(t.servicosTicket||[]).forEach((s,i)=>{if(_cobrancaPendente(s))r.push({t,s,i,c:_ultimaCobranca(s)});});});
+  return r.sort((a,b)=>new Date(a.c.data)-new Date(b.c.data));
+}
+
+function _injetarCardCobradoImpl(){
+  document.getElementById("cardCobradoImpl")?.remove();
+  if(!_veCobradoImpl())return;
+  const cont=document.getElementById("conteudo");if(!cont)return;
+  const l=_cobradoImplLista();const nT=new Set(l.map(x=>x.t.id)).size;
+  const html=`<div id="cardCobradoImpl" class="doc-rec-card cob ${l.length?"ativo pisca":""}" onclick="mostrarCobradoImpl()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarCobradoImpl()">
+    <div class="doc-rec-num">${nT}</div>
+    <div style="flex:1;min-width:0;"><div class="doc-rec-tit">📣 COBRADO PELA IMPLANTAÇÃO</div>
+    <div class="doc-rec-sub">${l.length?`${nT} ticket(s) · ${l.length} serviço(s) aguardando sua resposta`:"Nenhuma cobrança da Implantação"}</div></div>
+    <span class="doc-rec-abrir">Responder</span></div>`;
+  const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
+  if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
+}
+
+/* Dentro do ticket (Credenciamento): aviso no serviço cobrado + botão Responder */
+function _marcarCobrancaCred(t,wrap){
+  (t.servicosTicket||[]).forEach((srv,i)=>{
+    const ult=_ultimaCobranca(srv);if(!ult)return;
+    const ini=wrap.querySelector("#chk_ini_"+i);const tr=ini?ini.closest("tr"):null;if(!tr)return;
+    const td=tr.querySelector(":scope > td");if(!td)return;
+    const n=(srv.cobrancas||[]).length;let h;
+    if(_cobrancaPendente(srv)&&!_ticketFechado(t)){
+      tr.classList.add("cob-linha");
+      h=`<div class="cob-cred pisca-borda"><b>📣 Cobrado pela Implantação</b><div class="ck-quem">${escHtml(ult.usuario)} · ${formatarData(ult.data)}${ult.atrasoHoras?` · ${ult.atrasoHoras}h de atraso`:""}${n>1?` · ${n}ª cobrança`:""}</div>
+        ${_podeResponderCob(t)?`<button class="btn-cob-resp" onclick="abrirResponderCobranca('${t.id}',${i})">Responder</button>`:""}</div>`;
+    }else if(ult.resposta){
+      h=`<div class="cob-resp-ok" style="text-align:left;">✅ Cobrança respondida por ${escHtml(ult.resposta.usuario)} · ${formatarData(ult.resposta.data)}</div>`;
+    }
+    if(h)td.insertAdjacentHTML("beforeend",h);
+  });
+}
+
+_injetar("modalResponderCob",`<div id="modalResponderCob" class="modal-overlay" style="display:none;"><div class="modal-box"><h3>📣 Responder cobrança da Implantação</h3><div id="modalResponderCobInfo" style="font-size:13px;color:#555;margin-bottom:10px;"></div><label style="display:block;"><b>Resposta para a Implantação *</b></label><textarea id="modalResponderCobTexto" rows="3" maxlength="600" style="margin:6px 0 8px;resize:vertical;" placeholder="Ex.: proposta enviada à adquirente, aguardando retorno até amanhã"></textarea><div style="font-size:12px;color:#555;background:#fff4e6;border:1px solid #fdba74;border-radius:6px;padding:8px 10px;margin-bottom:14px;">A resposta também fica registrada como atualização do serviço (📝).</div><div style="display:flex;gap:8px;"><button class="btn-primary" style="background:#fd7e14;" onclick="confirmarResponderCobranca()">Enviar resposta</button><button class="btn-dark" onclick="fecharModal('modalResponderCob')">Cancelar</button></div></div></div>`);
+let _cobRespAlvo={id:null,i:null};
+window.abrirResponderCobranca=function(id,i){
+  const a=_srvAlvo(id,i);if(!a||!_cobrancaPendente(a.srv))return;
+  if(!_podeResponderCob(a.t)){_negar("responder cobrança (somente Credenciamento)");return;}
+  _cobRespAlvo={id,i};const c=_ultimaCobranca(a.srv);
+  document.getElementById("modalResponderCobInfo").innerHTML=`Ticket #${escHtml(id)} — <b>${escHtml(a.t.cliente||"")}</b><br>Serviço: <b>${escHtml(a.srv.nome)}</b><div class="ck-quem" style="margin-top:4px;">Cobrado por ${escHtml(c.usuario)} em ${formatarData(c.data)}${c.atrasoHoras?` · ${c.atrasoHoras}h de atraso`:""}</div>`;
+  document.getElementById("modalResponderCobTexto").value="";
+  document.getElementById("modalResponderCob").style.display="flex";setTimeout(()=>document.getElementById("modalResponderCobTexto").focus(),50);
+};
+window.confirmarResponderCobranca=async function(){
+  const txt=(document.getElementById("modalResponderCobTexto").value||"").trim();if(!txt){alert("Escreva a resposta para a Implantação.");return;}
+  const a=_srvAlvo(_cobRespAlvo.id,_cobRespAlvo.i);fecharModal("modalResponderCob");_cobRespAlvo={id:null,i:null};
+  if(!a||!_cobrancaPendente(a.srv))return;
+  const agr=agora();
+  _ultimaCobranca(a.srv).resposta={texto:txt,usuario:usuarioLogado.nome,data:agr};
+  if(!a.srv.atualizacoes)a.srv.atualizacoes=[];
+  a.srv.atualizacoes.push({responsavel:usuarioLogado.nome,usuario:usuarioLogado.nome,data:agr,texto:"Resposta à cobrança da Implantação: "+txt});
+  a.srv.ultimaAtualizacaoServico=agr;
+  _logHistorico(a.idx,`✅ Credenciamento respondeu a cobrança da Implantação no serviço "${a.srv.nome}" — "${txt}"`,"cobranca_resp");
+  a.t.ultimaAtualizacao=agr;await salvarTicket(a.t);
+  _toast(`Cobrança do serviço ${a.srv.nome} respondida.`);
+  if(_telaAtual==="ticket"&&_ticketAbertoId===a.t.id)verTicket(a.t.id);else if(_telaAtual==="cobradoimpl")mostrarCobradoImpl();else _atualizarTelaAtual();
+};
+/* Atualização (📝) feita pelo Credenciamento num serviço cobrado também conta como resposta */
+const _confAtuSrvCobOrig=window.confirmarAtualizacaoServico;
+window.confirmarAtualizacaoServico=async function(){
+  try{
+    const{ticketId,srvIdx}=_pendAtualizacaoServico||{};
+    const t=tickets.find(x=>x.id===ticketId);const srv=t&&(t.servicosTicket||[])[srvIdx];
+    const resp=(document.getElementById("modalAtualizacaoServicoResp")?.value||"").trim();
+    const txt=(document.getElementById("modalAtualizacaoServicoTexto")?.value||"").trim();
+    if(srv&&resp&&txt&&_ehCredenciamento(_setorAtual)&&_cobrancaPendente(srv))
+      _ultimaCobranca(srv).resposta={texto:txt,usuario:usuarioLogado.nome,data:agora(),viaAtualizacao:true};
+  }catch(e){console.error(e);}
+  return _confAtuSrvCobOrig.apply(this,arguments);
+};
+
+window.mostrarCobradoImpl=function(){
+  if(!usuarioLogado)return;if(!_veCobradoImpl()){_irInicio();return;}
+  if(document.querySelector(".modal-overlay[style*='flex']"))return;
+  _telaAtual="cobradoimpl";_ticketAbertoId=null;
+  const l=_cobradoImplLista();const nT=new Set(l.map(x=>x.t.id)).size;
+  document.getElementById("conteudo").innerHTML=`<div style="max-width:900px;">
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+      <button class="btn-dark" onclick="_irInicio()">← Voltar</button><h2 style="margin:0;">📣 Cobrado pela Implantação</h2>
+      <span style="font-size:13px;color:#888;">${nT} ticket(s) · ${l.length} serviço(s) aguardando resposta</span></div>
+    ${l.length?l.map(x=>{const hrs=horasUteisEntre(x.c.data,new Date().toISOString());const n=(x.s.cobrancas||[]).length;
+      return`<div class="card" style="border-left-color:#fd7e14;">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:flex-start;">
+          <div><span style="font-size:11px;color:#aaa;">#${x.t.id}</span> <b style="font-size:15px;">${escHtml(x.t.cliente||"")}</b>${x.t.cnpj?` <span style="font-size:11px;color:#888;">📄 ${escHtml(x.t.cnpj)}</span>`:""}
+            <div style="margin-top:4px;"><span class="badge" style="background:#fd7e14;color:white;">🧩 ${escHtml(x.s.nome)}</span> ${n>1?`<span class="badge" style="background:#fff3cd;color:#856404;">🔁 ${n}ª cobrança</span>`:""} <span style="font-size:12px;color:${hrs>4?"#e74a3b":"#666"};">cobrado há ${hrs.toFixed(0)}h úteis</span></div></div>
+          <div style="display:flex;gap:6px;"><button class="btn-dark" onclick="verTicket('${x.t.id}')">Abrir ticket</button>${_podeResponderCob(x.t)?`<button class="btn-primary" style="background:#fd7e14;" onclick="abrirResponderCobranca('${x.t.id}',${x.i})">Responder</button>`:""}</div>
+        </div>
+        <div class="cob-cred" style="margin-top:10px;">Cobrado por <b>${escHtml(x.c.usuario)}</b> em ${formatarData(x.c.data)}${x.c.atrasoHoras?` · serviço com ${x.c.atrasoHoras}h de atraso`:""}</div>
+      </div>`;}).join(""):`<div class="card" style="text-align:center;padding:40px 20px;color:#666;"><div style="font-size:40px;">🎉</div><b>Nenhuma cobrança da Implantação.</b><div style="font-size:13px;margin-top:4px;">Quando a Implantação marcar "Cobrado" em um serviço, ele aparece aqui.</div></div>`}
+  </div>`;
+};
+
+/* Aviso imediato quando chega cobrança nova (vale em qualquer tela) */
+const _cobAvisoAnt={};
+function _avisoCobrancas(){
+  if(!usuarioLogado||!_setorEscolhido)return;
+  let chave,qtd,msg,abrir;
+  if(_veCobradoImpl()){chave="cred|"+_setorAtual;qtd=_cobradoImplLista().length;msg="📣 Nova cobrança da Implantação. Clique para responder.";abrir=()=>mostrarCobradoImpl();}
+  else if(_ehImplantacao(_setorAtual)){chave="impl|"+_setorAtual;qtd=_pendSrvLista().length;msg="📣 O Credenciamento acionou a Implantação em um serviço. Clique para ver.";abrir=()=>mostrarPendSrv();}
+  else return;
+  const ant=_cobAvisoAnt[chave];_cobAvisoAnt[chave]=qtd;
+  if(ant===undefined||qtd<=ant)return;
+  document.getElementById("cobAviso")?.remove();
+  const d=document.createElement("div");d.id="cobAviso";d.className="cob-aviso";d.setAttribute("role","alert");
+  d.innerHTML=`<span>${msg}</span><button aria-label="Fechar" onclick="event.stopPropagation();this.parentElement.remove()">✕</button>`;
+  d.onclick=()=>{d.remove();try{abrir();}catch(e){console.error(e);}};
+  document.body.appendChild(d);setTimeout(()=>d.remove(),12000);
+}
+const _atuTelaCobOrig=window._atualizarTelaAtual;
+window._atualizarTelaAtual=function(){const r=_atuTelaCobOrig.apply(this,arguments);try{_avisoCobrancas();}catch(e){console.error(e);}return r;};
+
+(function(){const st=document.createElement("style");st.textContent=`
+  @keyframes cobPiscaCob{0%,100%{background:#fd7e14;border-color:#fd7e14;box-shadow:0 0 0 0 rgba(253,126,20,.6);}50%{background:#c2410c;border-color:#fff3e0;box-shadow:0 0 0 8px rgba(253,126,20,0);}}
+  @keyframes cobPiscaPend{0%,100%{background:#6f42c1;border-color:#6f42c1;box-shadow:0 0 0 0 rgba(111,66,193,.6);}50%{background:#4c2a91;border-color:#efe7fb;box-shadow:0 0 0 8px rgba(111,66,193,0);}}
+  @keyframes cobPiscaBorda{0%,100%{border-color:#fd7e14;}50%{border-color:#fff4e6;}}
+  .doc-rec-card.cob.pisca{animation:cobPiscaCob 1.1s ease-in-out infinite;}
+  .doc-rec-card.pend.pisca{animation:cobPiscaPend 1.1s ease-in-out infinite;}
+  .cob-pisca-badge{background:#fd7e14;color:white;animation:pulse48 1.1s infinite;}
+  .cob-cred{min-width:190px;margin-top:6px;background:#fff4e6;border:2px solid #fd7e14;border-radius:6px;padding:6px 8px;font-size:11px;color:#7c2d12;}
+  .cob-cred.pisca-borda{animation:cobPiscaBorda 1.1s ease-in-out infinite;}
+  .btn-cob-resp{margin-top:5px;font-size:10px;padding:4px 10px;background:#fd7e14;color:white;border:none;border-radius:5px;cursor:pointer;font-weight:700;}
+  .btn-cob-resp:hover{background:#c2410c;}
+  tr.cob-linha{background:#fff9f2;}
+  .cob-resp-ok{font-size:9px;color:#15803d;font-weight:700;margin-top:3px;}
+  .cob-aviso{position:fixed;top:16px;right:16px;z-index:10000;max-width:380px;display:flex;align-items:center;gap:10px;background:#fd7e14;color:white;font-size:13px;font-weight:700;padding:12px 14px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;animation:cobPiscaCob 1.1s ease-in-out infinite;}
+  .cob-aviso button{background:transparent;border:none;color:white;font-size:14px;cursor:pointer;padding:0 2px;width:auto;margin:0;}
+`;document.head.appendChild(st);})();
 
 /* ---------------- Caixinhas liberadas por usuário ----------------
    Esconde na tela de Tickets as caixinhas que o usuário não tem marcadas
