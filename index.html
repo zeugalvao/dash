@@ -4793,6 +4793,114 @@ window._atualizarTelaAtual=function(){const r=_atuTelaCobOrig.apply(this,argumen
   .cob-aviso button{background:transparent;border:none;color:white;font-size:14px;cursor:pointer;padding:0 2px;width:auto;margin:0;}
 `;document.head.appendChild(st);})();
 
+
+/* ============================================================
+   SIMULAR AMBIENTE (somente ADM)
+   O ADM escolhe um setor e um perfil de acesso e passa a ver o CRM
+   exatamente como um usuário daquele setor/perfil. O nome continua o
+   do ADM (tudo que for feito fica registrado no nome dele).
+   "Voltar para visão ADM" restaura tudo como estava.
+   ============================================================ */
+let _simulacao=null,_simSetorSel=null;
+function _ehAdmReal(){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||!!_simulacao);}
+function _usuariosDoSetor(st){return usuarios.filter(u=>u.perfil!=="adm"&&!u.inativo&&_setoresDoUsuario(u).length<setores.length&&_setoresDoUsuario(u).includes(st));}
+function _simOpcoes(st){
+  const ops=perfisAcesso.map((p,k)=>({v:"p"+k,nome:p.nome,perm:p.permissoes,grupo:"Perfis de acesso"}));
+  _usuariosDoSetor(st).forEach(u=>ops.push({v:"u"+u._id,nome:`${u.nome}${u.perfilAcesso?` (${u.perfilAcesso})`:""}`,perm:u.permissoes,perfilNome:u.perfilAcesso||"Auxiliar",grupo:"Copiar permissões de um usuário do setor"}));
+  /* sugestão: perfil mais usado pelos usuários do setor; senão o que tem o nome do setor */
+  const cont={};_usuariosDoSetor(st).forEach(u=>{if(u.perfilAcesso)cont[u.perfilAcesso]=(cont[u.perfilAcesso]||0)+1;});
+  const maisUsado=Object.entries(cont).sort((a,b)=>b[1]-a[1])[0];
+  let sug=maisUsado?perfisAcesso.findIndex(p=>p.nome===maisUsado[0]):-1;
+  if(sug<0)sug=perfisAcesso.findIndex(p=>_normSetor(p.nome).includes(_normSetor(st).slice(0,6)));
+  let padrao=sug>=0?"p"+sug:(ops.find(o=>o.v[0]==="u")||ops[0]||{}).v;
+  return{ops,padrao};
+}
+
+_injetar("modalSimular",`<div id="modalSimular" class="modal-overlay" style="display:none;"><div class="modal-box" style="max-width:640px;width:100%;">
+  <h3 style="margin-top:0;">🎭 Simular ambiente</h3>
+  <p style="font-size:13px;color:#555;margin:0 0 12px;">Escolha o setor para ver o CRM como um usuário dele. Tudo o que você fizer durante a simulação é real e fica registrado no seu nome.</p>
+  <div class="es-grid sim-grid" id="simGrid"></div>
+  <div id="simPerfilBox" style="display:none;margin-top:14px;">
+    <label style="display:block;"><b>Permissões de</b></label>
+    <select id="simPerfil" style="margin:6px 0 4px;"></select>
+    <div style="font-size:11px;color:#888;margin-bottom:10px;">Define quais botões, módulos e caixinhas aparecem, igual ao usuário real.</div>
+  </div>
+  <div style="display:flex;gap:8px;margin-top:6px;"><button class="btn-primary" id="simEntrar" disabled onclick="confirmarSimulacao()">Entrar na simulação</button><button class="btn-dark" onclick="fecharModal('modalSimular')">Cancelar</button></div>
+</div></div>`);
+
+window.abrirSimulacao=function(){
+  if(!usuarioLogado||usuarioLogado.perfil!=="adm"||_simulacao)return;
+  _garantirSetoresPadrao();_simSetorSel=null;
+  document.getElementById("simGrid").innerHTML=setores.map((st,k)=>`<button class="es-card" data-k="${k}" onclick="_simEscolherSetor(${k})"><span class="es-ico">${_iconeSetor(st)}</span><span><div class="es-nome">${escHtml(st)}</div><div class="es-cont">${_usuariosDoSetor(st).length} usuário(s) no setor</div></span></button>`).join("")||`<div style="color:#999;">Nenhum setor cadastrado.</div>`;
+  document.getElementById("simPerfilBox").style.display="none";
+  document.getElementById("simEntrar").disabled=true;
+  document.getElementById("modalSimular").style.display="flex";closeSidebar();
+};
+window._simEscolherSetor=function(k){
+  const st=setores[k];if(st===undefined)return;_simSetorSel=st;
+  document.querySelectorAll("#simGrid .es-card").forEach(b=>b.classList.toggle("atual",b.dataset.k===String(k)));
+  const{ops,padrao}=_simOpcoes(st);const grupos=[...new Set(ops.map(o=>o.grupo))];
+  document.getElementById("simPerfil").innerHTML=ops.length?grupos.map(g=>`<optgroup label="${escHtml(g)}">${ops.filter(o=>o.grupo===g).map(o=>`<option value="${escHtml(o.v)}" ${o.v===padrao?"selected":""}>${escHtml(o.nome)}</option>`).join("")}</optgroup>`).join(""):`<option value="">Sem perfis cadastrados (acesso completo de auxiliar)</option>`;
+  document.getElementById("simPerfilBox").style.display="block";
+  document.getElementById("simEntrar").disabled=false;
+};
+window.confirmarSimulacao=function(){
+  const st=_simSetorSel;if(st===null||!usuarioLogado||usuarioLogado.perfil!=="adm")return;
+  const v=document.getElementById("simPerfil").value;const o=_simOpcoes(st).ops.find(x=>x.v===v);
+  const adm=usuarioLogado;
+  _simulacao={admId:adm._id,adm,setor:st,rotulo:o?(o.perfilNome||o.nome):"Auxiliar",
+    antes:{setor:_setorAtual,escolhido:_setorEscolhido,modulo:_moduloAtual}};
+  const clone=JSON.parse(JSON.stringify(adm));
+  delete clone._id; /* evita que o tempo real troque de volta para o usuário ADM */
+  Object.assign(clone,{perfil:"auxiliar",perfilAcesso:_simulacao.rotulo,permissoes:o&&o.perm?JSON.parse(JSON.stringify(o.perm)):undefined,setoresAcesso:[st],setor:st,trocarSenha:false,_simulado:true});
+  usuarioLogado=clone;
+  _setorAtual=st;_setorEscolhido=true;_telaAtual="tickets";_ticketAbertoId=null;
+  fecharModal("modalSimular");
+  _entrarNoCrm();_simAtualizarUI();
+  _toast(`Simulando ${st} · ${_simulacao.rotulo}`);
+};
+window.sairSimulacao=function(){
+  if(!_simulacao)return;const s=_simulacao;_simulacao=null;
+  document.querySelectorAll(".modal-overlay").forEach(m=>m.style.display="none");
+  usuarioLogado=usuarios.find(u=>u._id===s.admId)||s.adm;
+  _setorAtual=s.antes.setor;_setorEscolhido=s.antes.escolhido;_moduloAtual=s.antes.modulo;
+  _telaAtual="tickets";_ticketAbertoId=null;
+  _aplicarNav();if(_modulosPermitidos().includes(s.antes.modulo))_moduloAtual=s.antes.modulo;
+  _aplicarNav();_irInicio();_simAtualizarUI();
+  _toast("De volta à visão ADM");
+};
+function _simAtualizarUI(){
+  document.body.classList.toggle("simulando",!!_simulacao);
+  const bs=document.getElementById("btnSimular");
+  if(bs)bs.style.display=usuarioLogado&&usuarioLogado.perfil==="adm"&&!_simulacao?"block":"none";
+  const bv=document.getElementById("btnSairSimulacao");if(bv)bv.style.display=_simulacao?"block":"none";
+  let bar=document.getElementById("simBarra");
+  if(!_simulacao){bar?.remove();return;}
+  if(!bar){bar=document.createElement("div");bar.id="simBarra";bar.setAttribute("role","status");document.body.appendChild(bar);}
+  bar.innerHTML=`<span>🎭 Simulando <b>${escHtml(_simulacao.setor)}</b> · ${escHtml(_simulacao.rotulo)}</span><button onclick="sairSimulacao()">↩ Voltar para visão ADM</button>`;
+}
+
+/* botões no menu lateral */
+(function(){
+  const ref=document.getElementById("btnBackup")||document.getElementById("btnCadastros");if(!ref)return;
+  ref.insertAdjacentHTML("afterend",`<button id="btnSimular" onclick="abrirSimulacao()" style="display:none;background:#0f766e;margin-top:0;margin-bottom:10px;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;color:white;font-size:12px;width:100%;font-weight:700;">🎭 SIMULAR AMBIENTE</button>
+    <button id="btnSairSimulacao" onclick="sairSimulacao()" style="display:none;background:#f59e0b;margin-top:0;margin-bottom:10px;padding:8px 12px;border:none;border-radius:6px;cursor:pointer;color:#1f2937;font-size:12px;width:100%;font-weight:700;">↩ VOLTAR PARA VISÃO ADM</button>`);
+})();
+const _aplicarNavSimOrig=_aplicarNav;
+_aplicarNav=function(){const r=_aplicarNavSimOrig.apply(this,arguments);try{_simAtualizarUI();}catch(e){}return r;};
+const _logoutSimOrig=window.logout;
+window.logout=function(){if(_simulacao){usuarioLogado=_simulacao.adm;_simulacao=null;}_simAtualizarUI();return _logoutSimOrig.apply(this,arguments);};
+
+(function(){const st=document.createElement("style");st.textContent=`
+  .sim-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));}
+  .sim-grid .es-card{padding:12px;}
+  #simBarra{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);z-index:9998;display:flex;align-items:center;gap:12px;background:#1f2937;color:white;font-size:13px;padding:8px 8px 8px 16px;border-radius:30px;box-shadow:0 6px 20px rgba(0,0,0,.3);border:2px solid #f59e0b;max-width:calc(100vw - 24px);flex-wrap:wrap;justify-content:center;}
+  #simBarra button{width:auto;margin:0;background:#f59e0b;color:#1f2937;border:none;border-radius:20px;padding:6px 14px;font-weight:700;font-size:12px;cursor:pointer;}
+  #simBarra button:hover{background:#fbbf24;}
+  body.simulando #conteudo{padding-bottom:70px;}
+  body.simulando .sidebar{box-shadow:inset -4px 0 0 #f59e0b;}
+`;document.head.appendChild(st);})();
+
 /* ---------------- Caixinhas liberadas por usuário ----------------
    Esconde na tela de Tickets as caixinhas que o usuário não tem marcadas
    em Cadastros → Usuários. Roda sempre que o conteúdo é redesenhado. */
