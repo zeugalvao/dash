@@ -3834,7 +3834,7 @@ window.renderListaTickets=function(lista){
     if(_ehImplantacao(_setorAtual)&&_espelhadoImplantacao(t))h=h.replace(marca,marca+`<span class="badge" style="background:#6f42c1;color:white;">🪞 Espelho · ${escHtml(t.setor)}</span>`);
     {const ps=(t.servicosTicket||[]).filter(_pendAtiva);if(ps.length&&!_ticketFechado(t)){
       h=h.replace(marca,marca+(_ehImplantacao(_setorAtual)?`<span class="badge" style="background:#6f42c1;color:white;">🧩 Pendência: ${ps.map(x=>escHtml(x.nome)).join(", ")}</span>`:`<span class="badge" style="background:#6f42c1;color:white;">↩ ${ps.length} serviço(s) na Implantação</span>`));}}
-    if(_ehCredenciamento(_setorAtual)&&!_ticketFechado(t)){const nC=(t.servicosTicket||[]).filter(_cobrancaPendente).length;if(nC)h=h.replace(marca,marca+`<span class="badge cob-pisca-badge">📣 Cobrado pela Implantação (${nC})</span>`);}
+    if((_ehCredenciamento(_setorAtual)||_ehAdm())&&!_ticketFechado(t)){const nC=(t.servicosTicket||[]).filter(_cobrancaPendente).length;if(nC)h=h.replace(marca,marca+`<span class="badge cob-pisca-badge">📣 Cobrado pela Implantação (${nC})</span>`);}
     if(_ehImplantacao(_setorAtual)){const nA=_srvAtrasadosSemCobranca(t).length;if(nA)h=h.replace(marca,marca+`<span class="badge" style="background:#fd7e14;color:white;">📣 ${nA} atrasado(s) sem cobrança</span>`);}
     if(_checklistPendente(t)&&!_ticketFechado(t)){const its=_ckItens(t);
       const nR=its.filter(i=>_ckStatus(i)==="recusado").length,nC=its.filter(i=>_ckStatus(i)==="corrigido").length;
@@ -4521,20 +4521,20 @@ function _recarregarPend(a){if(_telaAtual==="ticket"&&_ticketAbertoId===a.t.id)v
 
 function _pendSrvLista(){const r=[];ticketsVisiveis().forEach(t=>{if(_ticketFechado(t))return;(t.servicosTicket||[]).forEach((s,i)=>{if(_pendAtiva(s))r.push({t,s,i});});});return r.sort((a,b)=>new Date(a.s.pendImplantacao.data)-new Date(b.s.pendImplantacao.data));}
 function _injetarCardPendSrv(){
-  if(!_ehImplantacao(_setorAtual))return;
+  if(!_veCobradoCred())return;
   const cont=document.getElementById("conteudo");if(!cont)return;
   document.getElementById("cardPendSrv")?.remove();
   const l=_pendSrvLista();const nT=new Set(l.map(x=>x.t.id)).size;
   const html=`<div id="cardPendSrv" class="doc-rec-card pend ${l.length?"ativo pisca":""}" onclick="mostrarPendSrv()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarPendSrv()">
     <div class="doc-rec-num">${nT}</div>
     <div style="flex:1;min-width:0;"><div class="doc-rec-tit">📣 COBRADO PELO CREDENCIAMENTO</div>
-    <div class="doc-rec-sub">${l.length?`${nT} ticket(s) · ${l.length} serviço(s) aguardando sua resposta`:"Nenhuma cobrança do Credenciamento"}</div></div>
+    <div class="doc-rec-sub">${l.length?`${nT} ticket(s) · ${l.length} serviço(s) aguardando ${_ehImplantacao(_setorAtual)?"sua resposta":"resposta da Implantação"}`:"Nenhuma cobrança do Credenciamento"}</div></div>
     <span class="doc-rec-abrir">Abrir</span></div>`;
   const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
   if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
 }
 window.mostrarPendSrv=function(){
-  if(!usuarioLogado)return;if(!_ehImplantacao(_setorAtual)){_irInicio();return;}
+  if(!usuarioLogado)return;if(!_veCobradoCred()){_irInicio();return;}
   if(document.querySelector(".modal-overlay[style*='flex']"))return;
   _telaAtual="pendsrv";_ticketAbertoId=null;
   const l=_pendSrvLista();
@@ -4656,7 +4656,10 @@ window._salvarPrefMeusTickets=function(v){
    mostra os serviços em que o Credenciamento acionou a Implantação.
    ============================================================ */
 function _cobrancaPendente(srv){const u=_ultimaCobranca(srv);return!!u&&!u.resposta&&!srv.finalizado?.marcado&&!srv.expirado?.marcado;}
-function _veCobradoImpl(){return!!usuarioLogado&&!!_setorAtual&&_ehCredenciamento(_setorAtual);}
+function _ehAdm(){return!!usuarioLogado&&usuarioLogado.perfil==="adm";}
+/* ADM vê os dois lados: o que a Implantação cobrou e o que o Credenciamento acionou */
+function _veCobradoImpl(){return!!usuarioLogado&&(_ehAdm()||(!!_setorAtual&&_ehCredenciamento(_setorAtual)));}
+function _veCobradoCred(){return!!usuarioLogado&&(_ehAdm()||_ehImplantacao(_setorAtual));}
 function _podeResponderCob(t){return!!usuarioLogado&&(usuarioLogado.perfil==="adm"||(_ehCredenciamento(_setorAtual)&&_pode("servicos",_modTicket(t))));}
 function _cobradoImplLista(){
   const r=[];ticketsVisiveis().forEach(t=>{if(_ticketFechado(t))return;(t.servicosTicket||[]).forEach((s,i)=>{if(_cobrancaPendente(s))r.push({t,s,i,c:_ultimaCobranca(s)});});});
@@ -4671,7 +4674,7 @@ function _injetarCardCobradoImpl(){
   const html=`<div id="cardCobradoImpl" class="doc-rec-card cob ${l.length?"ativo pisca":""}" onclick="mostrarCobradoImpl()" role="button" tabindex="0" onkeydown="if(event.key==='Enter')mostrarCobradoImpl()">
     <div class="doc-rec-num">${nT}</div>
     <div style="flex:1;min-width:0;"><div class="doc-rec-tit">📣 COBRADO PELA IMPLANTAÇÃO</div>
-    <div class="doc-rec-sub">${l.length?`${nT} ticket(s) · ${l.length} serviço(s) aguardando sua resposta`:"Nenhuma cobrança da Implantação"}</div></div>
+    <div class="doc-rec-sub">${l.length?`${nT} ticket(s) · ${l.length} serviço(s) aguardando ${_ehCredenciamento(_setorAtual)?"sua resposta":"resposta do Credenciamento"}`:"Nenhuma cobrança da Implantação"}</div></div>
     <span class="doc-rec-abrir">Responder</span></div>`;
   const alvo=cont.querySelector(".resumo-grid")||cont.firstElementChild;
   if(alvo)alvo.insertAdjacentHTML(cont.querySelector(".resumo-grid")?"beforebegin":"afterend",html);else cont.insertAdjacentHTML("afterbegin",html);
@@ -4758,12 +4761,12 @@ window.mostrarCobradoImpl=function(){
 const _cobAvisoAnt={};
 function _avisoCobrancas(){
   if(!usuarioLogado||!_setorEscolhido)return;
-  let chave,qtd,msg,abrir;
-  if(_veCobradoImpl()){chave="cred|"+_setorAtual;qtd=_cobradoImplLista().length;msg="📣 Nova cobrança da Implantação. Clique para responder.";abrir=()=>mostrarCobradoImpl();}
-  else if(_ehImplantacao(_setorAtual)){chave="impl|"+_setorAtual;qtd=_pendSrvLista().length;msg="📣 O Credenciamento acionou a Implantação em um serviço. Clique para ver.";abrir=()=>mostrarPendSrv();}
-  else return;
-  const ant=_cobAvisoAnt[chave];_cobAvisoAnt[chave]=qtd;
-  if(ant===undefined||qtd<=ant)return;
+  const checks=[];
+  if(_veCobradoImpl())checks.push(["cred|"+_setorAtual,_cobradoImplLista().length,"📣 Nova cobrança da Implantação. Clique para ver.",()=>mostrarCobradoImpl()]);
+  if(_veCobradoCred())checks.push(["impl|"+_setorAtual,_pendSrvLista().length,"📣 O Credenciamento acionou a Implantação em um serviço. Clique para ver.",()=>mostrarPendSrv()]);
+  let msg=null,abrir=null;
+  checks.forEach(([chave,qtd,m,f])=>{const ant=_cobAvisoAnt[chave];_cobAvisoAnt[chave]=qtd;if(ant!==undefined&&qtd>ant&&!msg){msg=m;abrir=f;}});
+  if(!msg)return;
   document.getElementById("cobAviso")?.remove();
   const d=document.createElement("div");d.id="cobAviso";d.className="cob-aviso";d.setAttribute("role","alert");
   d.innerHTML=`<span>${msg}</span><button aria-label="Fechar" onclick="event.stopPropagation();this.parentElement.remove()">✕</button>`;
