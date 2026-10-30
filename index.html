@@ -2962,6 +2962,7 @@ function mostrarTarefas(){
      quando o ticket foi atualizado mas o serviço específico não foi. */
   function _srv48adq(ticket, srv){
     if(!_isServicoAdquirente(srv.nome))return false;
+    if(typeof _srvNoSetorAtual48==="function"){if(!_srvNoSetorAtual48(ticket,srv))return false;if(_pendAtiva(srv))return servicoPrecisaAtualizacao48h(ticket,srv);}
     if(!srv.iniciado?.marcado||srv.finalizado?.marcado||srv.expirado?.marcado)return false;
     if(["Concluído","Encerrado","Cancelado"].includes(ticket.status))return false;
     /* referência de tempo: última atualização do SERVIÇO → data de início */
@@ -2976,6 +2977,7 @@ function mostrarTarefas(){
 
   function _srv48outro(ticket, srv){
     if(_isServicoAdquirente(srv.nome))return false;  // adquirentes já tratadas acima
+    if(typeof _srvNoSetorAtual48==="function"){if(!_srvNoSetorAtual48(ticket,srv))return false;if(_pendAtiva(srv))return servicoPrecisaAtualizacao48h(ticket,srv);}
     if(!srv.iniciado?.marcado||srv.finalizado?.marcado||srv.expirado?.marcado)return false;
     if(["Concluído","Encerrado","Cancelado"].includes(ticket.status))return false;
     const ref=srv.ultimaAtualizacaoServico
@@ -4454,7 +4456,36 @@ function _podeDevolverCred(){return!!usuarioLogado&&(usuarioLogado.perfil==="adm
 
 /* 48h sem atualização não vale para serviço que está com a Implantação */
 const _prec48Orig=window.servicoPrecisaAtualizacao48h;
-window.servicoPrecisaAtualizacao48h=function(t,srv){if(_pendAtiva(srv))return false;return _prec48Orig.apply(this,arguments);};
+/* Regra: o alerta de 48h aparece APENAS no setor onde o serviço está no momento.
+   - Serviço com pendência ativa na Implantação → só conta na Implantação
+     (referência: data em que foi acionado / última movimentação).
+   - Demais serviços → só contam no setor atual do ticket (t.setor).
+   - ADM na visão "Todos os setores" vê tudo. */
+function _srvAtivo48(srv){return!!(srv&&srv.iniciado?.marcado&&!srv.finalizado?.marcado&&!srv.expirado?.marcado);}
+function _srvNoSetorAtual48(t,srv){
+  if(!_setorEscolhido||!_setorAtual)return true;
+  if(_pendAtiva(srv))return _ehImplantacao(_setorAtual);
+  return _normSetor(t.setor)===_normSetor(_setorAtual);
+}
+window.servicoPrecisaAtualizacao48h=function(t,srv){
+  if(!t||!srv||_ticketFechado(t)||!_srvAtivo48(srv))return false;
+  if(!_srvNoSetorAtual48(t,srv))return false;
+  if(_pendAtiva(srv)){
+    const refs=[srv.pendImplantacao.data,srv.ultimaAtualizacaoServico,...(srv.pendHist||[]).map(h=>h.data)]
+      .filter(Boolean).map(d=>new Date(d).getTime()).filter(n=>!isNaN(n));
+    if(!refs.length)return false;
+    return(Date.now()-Math.max(...refs))/3600000>=48;
+  }
+  return _prec48Orig.apply(this,arguments);
+};
+window.precisaAtualizacao48h=function(t){
+  if(!t||_ticketFechado(t))return false;
+  const srvs=(t.servicosTicket||[]).filter(s=>_srvAtivo48(s)&&_srvNoSetorAtual48(t,s));
+  if(!srvs.length)return false;
+  if(srvs.some(s=>servicoPrecisaAtualizacao48h(t,s)))return true;
+  /* fallback pela atualização do ticket: só para serviços que estão no setor do ticket */
+  return srvs.some(s=>!_pendAtiva(s))&&horasDesdeUltimaAtualizacao(t)>=48;
+};
 
 function _marcarPendSrv(t,wrap){
   const naImpl=_ehImplantacao(_setorAtual);
